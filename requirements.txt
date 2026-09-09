@@ -1,0 +1,6 @@
+Flask
+Flask-SQLAlchemy
+yt-dlp>=2024.1
+APScheduler>=3.10
+waitress>=2.1
+requests>=2.28

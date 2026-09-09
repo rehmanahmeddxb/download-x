@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YT Downloader X Pro</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <i class="fa-solid fa-bolt-lightning"></i>
+      <span>YT Downloader <b>X Pro</b></span>
+    </div>
+    <ul class="sidebar-nav">
+      <li class="{{ 'active' if active_page == 'dashboard' }}"><a href="{{ url_for('home.dashboard') }}"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
+      <li class="{{ 'active' if active_page == 'downloads' }}"><a href="{{ url_for('home.downloads') }}"><i class="fa-solid fa-download"></i> Downloads &amp; Queue</a></li>
+      <li class="{{ 'active' if active_page == 'history' }}"><a href="{{ url_for('home.history') }}"><i class="fa-solid fa-clock-rotate-left"></i> History</a></li>
+      <li class="{{ 'active' if active_page == 'settings' }}"><a href="{{ url_for('home.settings') }}"><i class="fa-solid fa-sliders"></i> Settings</a></li>
+      <li class="{{ 'active' if active_page == 'about' }}"><a href="{{ url_for('home.about') }}"><i class="fa-solid fa-circle-info"></i> About</a></li>
+      <li class="{{ 'active' if active_page == 'contact' }}"><a href="{{ url_for('home.contact') }}"><i class="fa-solid fa-envelope"></i> Contact Us</a></li>
+      <li class="{{ 'active' if active_page == 'dmca' }}"><a href="{{ url_for('home.dmca') }}"><i class="fa-solid fa-scale-balanced"></i> DMCA</a></li>
+    </ul>
+  </nav>
+
+  <!-- Main -->
+  <div class="main-area">
+    <div class="topbar">
+      <button class="btn-topbar-toggle d-lg-none" id="sidebarToggle"><i class="fa-solid fa-bars"></i></button>
+      <div class="topbar-title">{% block page_title %}Dashboard{% endblock %}</div>
+      <div class="topbar-status">
+        <span class="pulse-dot"></span> Live
+      </div>
+    </div>
+    <div class="content-area">
+      {% block content %}{% endblock %}
+    </div>
+
+    <footer class="app-footer">
+      <div class="app-footer-inner">
+        <div class="app-footer-brand">
+          <i class="fa-solid fa-bolt-lightning"></i>
+          <span>YT Downloader <b>X Pro</b></span>
+          <span class="app-footer-version">v0.1.0</span>
+        </div>
+
+        <nav class="app-footer-links" aria-label="Footer navigation">
+          <a href="{{ url_for('home.about') }}">
+            <i class="fa-solid fa-circle-info"></i> About
+          </a>
+          <a href="{{ url_for('home.contact') }}">
+            <i class="fa-solid fa-envelope"></i> Contact Us
+          </a>
+          <a href="{{ url_for('home.dmca') }}">
+            <i class="fa-solid fa-scale-balanced"></i> DMCA
+          </a>
+          <a href="https://github.com/rehmanahmeddxb/download-x" target="_blank" rel="noopener">
+            <i class="fa-brands fa-github"></i> GitHub
+          </a>
+        </nav>
+
+        <div class="app-footer-copy">
+          &copy; {{ now_year if now_year is defined else '2026' }}
+          <span class="text-muted">Built with Flask &amp; yt-dlp. For personal use only.</span>
+        </div>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

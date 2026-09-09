@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block page_title %}Dashboard{% endblock %}
+{% block content %}
+<div class="row g-3 animate__animated animate__fadeIn">
+  <div class="col-6 col-md-3">
+    <div class="stat-card"><i class="fa-solid fa-list-check"></i>
+      <div><div class="stat-value" id="stat-total">-</div><div class="stat-label">Total Downloads (All-Time)</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card"><i class="fa-solid fa-circle-check"></i>
+      <div><div class="stat-value" id="stat-completed">-</div><div class="stat-label">Completed</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card"><i class="fa-solid fa-bolt"></i>
+      <div><div class="stat-value" id="stat-active">-</div><div class="stat-label">Active</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card"><i class="fa-solid fa-layer-group"></i>
+      <div><div class="stat-value" id="stat-queued">-</div><div class="stat-label">Queued</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-6 col-md-3"><div class="mini-card"><span id="stat-today">-</span><small>This Session</small></div></div>
+  <div class="col-6 col-md-3"><div class="mini-card"><span id="stat-month">-</span><small>Failed (Session)</small></div></div>
+  <div class="col-6 col-md-3"><div class="mini-card"><span id="stat-totalgb">-</span><small>All Time (GB)</small></div></div>
+  <div class="col-6 col-md-3"><div class="mini-card"><span id="stat-success">-</span><small>Success Rate</small></div></div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-12 col-lg-7">
+    <div class="glass-panel">
+      <h6>Downloads (Last 7 Days, All-Time)</h6>
+      <canvas id="chartDays" height="140"></canvas>
+    </div>
+  </div>
+  <div class="col-12 col-lg-5">
+    <div class="glass-panel">
+      <h6>Disk Usage</h6>
+      <canvas id="chartDisk" height="140"></canvas>
+      <div class="mt-2 small text-muted">Top uploader: <b id="top-uploader">-</b> &middot; Top format: <b id="top-format">-</b></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1 mb-4">
+  <div class="col-12">
+    <div class="glass-panel">
+      <h6>Recent Activity</h6>
+      <div id="recent-activity" class="activity-feed"><div class="text-muted small">Loading...</div></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block page_title %}Contact Us{% endblock %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-12 col-lg-7">
+    <div class="glass-panel">
+      <h5><i class="fa-solid fa-envelope"></i> Get in touch</h5>
+      <p class="text-muted">
+        Found a bug, want to request a feature, or have a partnership
+        inquiry? Drop us a message and we&rsquo;ll get back to you as
+        soon as possible.
+      </p>
+
+      <form id="contactForm" novalidate>
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label small text-muted">Your name</label>
+            <input type="text" class="form-control" name="name" required
+                   placeholder="Jane Doe">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small text-muted">Email address</label>
+            <input type="email" class="form-control" name="email" required
+                   placeholder="jane@example.com">
+          </div>
+          <div class="col-12">
+            <label class="form-label small text-muted">Subject</label>
+            <select class="form-select" name="subject" required>
+              <option value="" selected disabled>Choose a topic&hellip;</option>
+              <option>Bug report</option>
+              <option>Feature request</option>
+              <option>General question</option>
+              <option>Partnership / press</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label small text-muted">Message</label>
+            <textarea class="form-control" name="message" rows="6" required
+                      placeholder="Tell us what&rsquo;s on your mind&hellip;"></textarea>
+          </div>
+          <div class="col-12 d-flex justify-content-end">
+            <button type="submit" class="btn btn-primary" id="contactSubmit">
+              <i class="fa-solid fa-paper-plane"></i> Send message
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-5">
+    <div class="glass-panel mb-3">
+      <h6><i class="fa-solid fa-circle-info"></i> Direct contact</h6>
+      <ul class="list-unstyled text-muted mb-0">
+        <li class="mb-2">
+          <i class="fa-solid fa-envelope me-2"></i>
+          <a href="mailto:support@downloadsx.app" class="link-light">
+            support@downloadsx.app
+          </a>
+        </li>
+        <li class="mb-2">
+          <i class="fa-brands fa-github me-2"></i>
+          <a href="https://github.com/rehmanahmeddxb/download-x" class="link-light" target="_blank" rel="noopener">
+            github.com/rehmanahmeddxb/download-x
+          </a>
+        </li>
+        <li class="mb-0">
+          <i class="fa-solid fa-globe me-2"></i>
+          <a href="https://downloadsx.app" class="link-light" target="_blank" rel="noopener">
+            downloadsx.app
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <div class="glass-panel">
+      <h6><i class="fa-solid fa-clock"></i> Response time</h6>
+      <p class="text-muted small mb-0">
+        We typically reply within <b>48 hours</b> on weekdays. For urgent
+        security or DMCA matters, please use the
+        <a href="{{ url_for('home.dmca') }}" class="link-light">DMCA page</a>
+        so it gets prioritized correctly.
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Lightweight client-side handler: validate, show a success toast, and
+  // reset the form. The actual email submission would POST to /api/contact,
+  // which can be added server-side later without changing this UI.
+  document.getElementById('contactForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    if (!form.checkValidity()) {
+      form.classList.add('was-validated');
+      return;
+    }
+    const btn = document.getElementById('contactSubmit');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending...';
+
+    // Simulated send. Replace with: fetch('/api/contact', {method:'POST', body:...})
+    setTimeout(() => {
+      Swal.fire({
+        icon: 'success',
+        title: 'Message sent',
+        text: 'Thanks for reaching out — we\u2019ll get back to you soon.',
+        background: '#111',
+        color: '#eee',
+      });
+      form.reset();
+      form.classList.remove('was-validated');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send message';
+    }, 700);
+  });
+</script>
+{% endblock %}
