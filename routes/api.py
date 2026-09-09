@@ -257,7 +257,10 @@ def direct_download():
             400,
         )
 
-    import requests
+    try:
+        import requests
+    except ImportError:
+        return jsonify({"error": "Direct streaming is unavailable in this build."}), 501
 
     upstream_headers = dict(resolved.get("headers") or {})
     # Pass through Range so the browser can pause/resume the transfer.

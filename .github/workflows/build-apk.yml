@@ -44,6 +44,23 @@ jobs:
         # would ship as "APK installs but instantly closes / dead UI".
         run: python .github/smoke_test.py
 
+      - name: Install APK-only launcher deps (for strip validation)
+        # The desktop app doesn't need Kivy, but the APK does -- and the
+        # file blacklist strips parts of it, so validate against the real
+        # packages. (filetype is imported unconditionally by kivy.core.image.)
+        run: pip install kivy filetype
+
+      - name: Check APK file blacklist is up to date
+        # The yt-dlp section of p4a-blacklist.txt is generated from the
+        # pinned yt-dlp; fail if it drifted instead of shipping stale patterns.
+        run: python .github/generate_blacklist.py --check
+
+      - name: Validate APK file blacklist
+        # Simulates the APK packer's file strip and re-runs the whole smoke
+        # suite against the stripped tree. Catches "stripped a file the app
+        # needs" without waiting 40 minutes for an APK that crashes on boot.
+        run: python .github/strip_check.py
+
   build-apk:
     name: Build APK (Buildozer / python-for-android)
     runs-on: ubuntu-latest

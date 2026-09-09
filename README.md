@@ -38,12 +38,41 @@ Short version: it ships an entire Python runtime plus the download engine.
   single Python payload.
 * **Flask / SQLAlchemy / waitress / requests** and the bundled web UI.
 
-Kept small on purpose: the build targets **`arm64-v8a` only** (every
-phone made since ~2016; a second 32-bit ABI would nearly double the size),
-ships **no database** (a fresh one is created in private storage on first
-launch), and carries **no unused dependencies**. Each CI run publishes an
-**APK size report** (step summary + `apk-contents.txt` in the build report
-artifact) showing exactly what takes the space.
+Kept small on purpose:
+
+* **`arm64-v8a` only** (every phone made since ~2016; a second 32-bit ABI
+  would nearly double the size),
+* **no database shipped** (a fresh one is created in private storage on
+  first launch),
+* **no unused dependencies**, and
+* **`p4a-blacklist.txt`** strips dead weight out of the Python bundle:
+  the ~930 non-YouTube yt-dlp extractor modules (~20 MB), SQLAlchemy test
+  helpers and non-SQLite dialects, Kivy dev modules, chardet, bytecode
+  caches and type stubs.
+
+Each CI run publishes an **APK size report** (step summary +
+`apk-contents.txt` in the build report artifact) showing exactly what
+takes the space.
+
+Two things to know when touching dependencies:
+
+1. Every pure-Python runtime dependency must be listed in
+   `buildozer.spec` **explicitly** — p4a's automatic resolution silently
+   skips packages without Android wheels (e.g. SQLAlchemy), and a missing
+   module crashes the app on launch with no error.
+2. The yt-dlp section of `p4a-blacklist.txt` is generated. After bumping
+   the yt-dlp pin, regenerate it and re-validate (CI enforces both):
+
+   ```bash
+   pip install -r requirements.txt
+   python .github/generate_blacklist.py
+   python .github/strip_check.py   # needs: pip install kivy filetype
+   ```
+
+Known packaging limitations: formats that need `ffmpeg` muxing or
+AES decryption via `pycryptodomex` can't be direct-streamed in the APK
+(neither ships a recipe) — add those to the queue instead, where yt-dlp
+reports a clear per-task error.
 
 ## Build the APK locally
 

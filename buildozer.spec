@@ -35,13 +35,36 @@ source.exclude_patterns = .git/*,.github/*,buildozer.spec,*.zip,downloads/*,temp
 version = 0.2.0
 
 # (list) Application requirements
-# flask, flask-sqlalchemy, sqlalchemy, requests and waitress are pure-Python
-# and are bundled directly without needing a recipe. yt-dlp is pure-Python
-# too, but large (~1000 extractor modules) -- it is the single biggest
-# Python payload in the APK. kivy (with the sdl2 bootstrap below) provides
-# the launcher / status screen; the app UI itself is the Flask web UI.
+# Every pure-Python runtime dependency must be listed EXPLICITLY. p4a's
+# automatic pip-dependency resolution silently drops packages it cannot
+# fetch for Android (e.g. SQLAlchemy, which ships no Android wheel), so an
+# unlisted transitive dep simply ends up missing from the APK -- and the
+# app then dies with ModuleNotFoundError on launch. What each entry is for:
+#   flask                  recipe (pulls jinja2/werkzeug/markupsafe/itsdangerous/click/blinker)
+#   flask-sqlalchemy       pip, pure -- ORM integration (needs sqlalchemy below)
+#   sqlalchemy             recipe -- compiled C extensions for ARM
+#   typing-extensions      pip, pure -- imported unconditionally by sqlalchemy
+#   yt-dlp                 pip, pure -- download engine (only the YouTube
+#                          extractor stack is kept; the other ~930 site
+#                          modules are stripped by p4a-blacklist.txt)
+#   mutagen                pip, pure -- lets yt-dlp embed thumbnails/metadata
+#   requests+urllib3+idna+charset-normalizer+certifi
+#                          pip, pure -- direct-to-browser streaming proxy
+#   waitress               pip, pure -- production WSGI server
+#   kivy                    recipe (pulls certifi/chardet/idna/requests/urllib3/filetype;
+#                          chardet is stripped again by p4a-blacklist.txt) --
+#                          launcher / status screen (the app UI is the Flask web UI)
 # Version pins mirror requirements.txt so desktop and APK behave the same.
-requirements = python3,flask==3.1.3,flask-sqlalchemy==3.1.1,sqlalchemy==2.0.52,yt-dlp==2026.8.19,requests==2.34.2,waitress==3.0.2,kivy
+requirements = python3,flask==3.1.3,flask-sqlalchemy==3.1.1,sqlalchemy==2.0.52,typing-extensions==4.16.0,yt-dlp==2026.8.19,mutagen==1.48.1,requests==2.34.2,urllib3==2.7.0,idna==3.19,charset-normalizer==3.5.1,certifi==2026.7.22,waitress==3.0.2,kivy
+
+# (str) p4a file blacklist: fnmatch patterns for files to LEAVE OUT of the
+# APK (dead weight: non-YouTube yt-dlp extractors, SQLAlchemy test helpers
+# and non-SQLite dialects, Kivy dev modules, chardet, bytecode caches).
+# A custom file REPLACES the bootstrap defaults, so p4a-blacklist.txt
+# embeds those defaults verbatim plus our strips. It is partly generated --
+# see .github/generate_blacklist.py -- and validated without building an
+# APK by .github/strip_check.py (runs in CI).
+android.blacklist_src = p4a-blacklist.txt
 
 # (str) Presplash / icon
 # (we don't ship one, so leave the defaults)
