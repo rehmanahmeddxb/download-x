@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block page_title %}About{% endblock %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-12">
+    <div class="glass-panel">
+      <h5><i class="fa-solid fa-bolt-lightning"></i> YT Downloader X Pro</h5>
+      <p class="text-muted mb-2">
+        A self-hosted YouTube download manager built with Flask + yt-dlp,
+        styled after commercial download managers. Runs locally in your
+        browser &mdash; your downloads never leave your device.
+      </p>
+      <p class="text-muted small mb-0">
+        Version <b>0.1.0</b> &middot; Open Source &middot; MIT-style license
+      </p>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-6">
+    <div class="glass-panel h-100">
+      <h6><i class="fa-solid fa-star"></i> Features</h6>
+      <ul class="text-muted mb-0">
+        <li>Fetch single videos, playlists, and channels</li>
+        <li>Full format list per video (resolution, codec, bitrate, size)</li>
+        <li>Parallel queue with pause / resume / cancel / retry / reorder</li>
+        <li>Automatic resume of partial downloads (yt-dlp continued download)</li>
+        <li>Dashboard statistics, history with CSV export</li>
+        <li>Dark neon UI, AJAX live updates, no WebSocket dependency</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-6">
+    <div class="glass-panel h-100">
+      <h6><i class="fa-solid fa-cubes-stacked"></i> Tech Stack</h6>
+      <ul class="text-muted mb-0">
+        <li><b>Backend:</b> Flask, Flask-SQLAlchemy, APScheduler, waitress</li>
+        <li><b>Engine:</b> yt-dlp (latest), ffmpeg (optional, for merging)</li>
+        <li><b>Frontend:</b> Bootstrap 5, Chart.js, SweetAlert2, Font Awesome</li>
+        <li><b>Packaging:</b> Buildozer / python-for-android (APK)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="glass-panel">
+      <h6><i class="fa-solid fa-triangle-exclamation"></i> Disclaimer</h6>
+      <p class="text-muted small mb-0">
+        YT Downloader X Pro is a personal download manager. You are solely
+        responsible for ensuring that the content you download does not
+        violate copyright law, the terms of service of the source platform,
+        or any applicable local regulations. The authors of this software
+        do not condone piracy. Please respect the creators whose work you
+        enjoy &mdash; download only what you have the right to download.
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}

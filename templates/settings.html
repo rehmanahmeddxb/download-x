@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block page_title %}Settings{% endblock %}
+{% block content %}
+<div class="glass-panel">
+  <form id="settingsForm">
+    <div class="row g-3">
+      <div class="col-12 col-md-6">
+        <label class="form-label">Download Folder</label>
+        <input type="text" class="form-control" name="download_folder">
+        <div class="form-text">On Android, use e.g. /storage/emulated/0/Download (requires "All files access" permission for Pydroid 3).</div>
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">Temp Folder</label>
+        <input type="text" class="form-control" name="temp_folder">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label">Max Concurrent Downloads</label>
+        <input type="number" min="1" max="10" class="form-control" name="max_concurrent">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label">Concurrent Fragments</label>
+        <input type="number" min="1" max="32" class="form-control" name="concurrent_fragments">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label">Max Retries</label>
+        <input type="number" min="0" max="10" class="form-control" name="max_retries">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label">Speed Limit (KB/s, 0=unlimited)</label>
+        <input type="number" min="0" class="form-control" name="speed_limit_kbps">
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">Filename Template</label>
+        <input type="text" class="form-control" name="filename_template">
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">Default Quality</label>
+        <select class="form-select" name="default_quality">
+          <option value="best">Best</option>
+          <option value="1080p">1080p</option>
+          <option value="720p">720p</option>
+          <option value="480p">480p</option>
+          <option value="audio">Audio Only (MP3)</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">Proxy (optional)</label>
+        <input type="text" class="form-control" name="proxy" placeholder="http://host:port">
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">Cookies File Path (optional)</label>
+        <input type="text" class="form-control" name="cookies_path">
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">FFmpeg Path (optional)</label>
+        <input type="text" class="form-control" name="ffmpeg_path">
+      </div>
+      <div class="col-12">
+        <hr class="border-secondary">
+        <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="auto_resume" id="auto_resume"><label class="form-check-label" for="auto_resume">Auto-resume incomplete downloads on startup</label></div>
+        <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="embed_metadata" id="embed_metadata"><label class="form-check-label" for="embed_metadata">Embed metadata</label></div>
+        <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="embed_thumbnail" id="embed_thumbnail"><label class="form-check-label" for="embed_thumbnail">Embed thumbnail</label></div>
+        <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="embed_subtitles" id="embed_subtitles"><label class="form-check-label" for="embed_subtitles">Embed subtitles</label></div>
+        <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="sponsorblock" id="sponsorblock"><label class="form-check-label" for="sponsorblock">Remove sponsor segments (SponsorBlock)</label></div>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-neon mt-3"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}

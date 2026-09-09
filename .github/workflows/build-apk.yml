@@ -1,0 +1,130 @@
+name: Build Android APK
+
+# Run the APK build on every push to main, plus manual triggers.
+# The signed (or debug) APK is published as a workflow artifact.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    name: Build APK (Buildozer / python-for-android)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache Buildozer / p4a build
+        # Speeds up repeat builds by caching ~/.buildozer (downloaded
+        # Android SDK / NDK / recipes / .gradle outputs). The first run
+        # will still be slow because everything has to be downloaded.
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            ~/Library/buildozer
+          key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec', 'requirements.txt', 'main.py') }}
+          restore-keys: |
+            ${{ runner.os }}-buildozer-
+
+      - name: Install Buildozer system dependencies
+        # python-for-android needs these system packages on Ubuntu to
+        # compile native recipes and run the SDK tooling.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            ccache \
+            git \
+            libffi-dev \
+            libssl-dev \
+            libbz2-dev \
+            libreadline-dev \
+            libsqlite3-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            xz-utils \
+            tk-dev \
+            liblzma-dev \
+            python3-pip \
+            python3-venv \
+            autoconf \
+            libtool \
+            pkg-config \
+            unzip \
+            zip \
+            openjdk-17-jdk-headless \
+            wget \
+            curl
+
+      - name: Install Buildozer
+        run: |
+          python -m pip install --upgrade pip
+          pip install --upgrade buildozer cython
+
+      - name: Accept Android SDK licenses
+        # p4a downloads its own Android SDK but needs the licences accepted
+        # before it can install platform-tools / build-tools.
+        run: |
+          export ANDROIDSDK="$HOME/.buildozer/android/platform/android-sdk"
+          mkdir -p "$ANDROIDSDK/licenses"
+          # These are the well-known p4a license hashes (Apache 2.0).
+          echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > "$ANDROIDSDK/licenses/android-sdk-license"
+          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > "$ANDROIDSDK/licenses/android-sdk-preview-license"
+          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$ANDROIDSDK/licenses/android-googletv-license"
+          echo "601085b94cd77f0b54ff86406957099ebe79c4d6" > "$ANDROIDSDK/licenses/google-gdk-license"
+
+      - name: Build APK with Buildozer
+        env:
+          # Use ccache to make rebuilds much faster.
+          USE_CCACHE: "1"
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+        run: |
+          # `buildozer -v android debug` builds a debug APK. Switch to
+          # `release` once you have a keystore configured.
+          buildozer -v android debug
+          # Collect whatever APK buildozer produced.
+          ls -la bin/ 2>/dev/null || true
+          find . -maxdepth 3 -name "*.apk" -print
+
+      - name: Verify APK was produced
+        run: |
+          set -e
+          APK=$(ls -1 bin/*.apk 2>/dev/null | head -n 1)
+          if [ -z "$APK" ]; then
+            echo "::error::No APK file found in bin/. Build may have failed."
+            ls -la
+            exit 1
+          fi
+          echo "APK_PATH=$APK" >> "$GITHUB_ENV"
+          echo "Built APK: $APK ($(du -h "$APK" | cut -f1))"
+
+      - name: Upload APK as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: downloadsx-apk
+          path: ${{ env.APK_PATH }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach APK to GitHub Release (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.APK_PATH }}
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

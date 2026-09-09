@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block page_title %}History{% endblock %}
+{% block content %}
+<div class="glass-panel mb-3">
+  <div class="d-flex gap-2 flex-wrap justify-content-between">
+    <input type="text" id="historySearch" class="form-control" style="max-width:300px" placeholder="Search history...">
+    <a class="btn btn-outline-light" href="/api/history/export.csv"><i class="fa-solid fa-file-csv"></i> Export CSV</a>
+  </div>
+</div>
+<div class="glass-panel">
+  <div id="historyList" class="history-list"><div class="text-muted small">Loading...</div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/history.js') }}"></script>
+{% endblock %}
