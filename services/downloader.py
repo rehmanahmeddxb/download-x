@@ -7,12 +7,20 @@ thousands of videos):
   - fetch_formats(): full extraction for ONE video -- returns every
     available format (resolution, fps, codec, bitrate, filesize, etc).
 """
-import yt_dlp
-
 # YouTube periodically blocks the default 'web' player client; falling
 # back through android/ios clients avoids most "video unavailable" /
 # "not found" errors without any user action.
 PLAYER_CLIENTS = {"youtube": {"player_client": ["android", "ios", "web"]}}
+
+
+def _yt_dlp():
+    """Lazily import yt-dlp so a missing/broken dependency surfaces as a
+    readable API error instead of crashing the whole app at import time."""
+    try:
+        import yt_dlp  # noqa: PLC0415 (intentional lazy import)
+    except ImportError as ex:
+        raise RuntimeError(f"Downloader engine unavailable: {ex}") from ex
+    return yt_dlp
 
 
 def _base_opts(extra=None):
@@ -33,7 +41,7 @@ def fetch_overview(url: str) -> dict:
     last_error = None
     for flat in (True, False):
         try:
-            with yt_dlp.YoutubeDL(_base_opts({"extract_flat": flat, "skip_download": True})) as ydl:
+            with _yt_dlp().YoutubeDL(_base_opts({"extract_flat": flat, "skip_download": True})) as ydl:
                 info = ydl.extract_info(url, download=False)
 
             entries_raw = info.get("entries")
@@ -84,7 +92,7 @@ def fetch_formats(url: str) -> dict:
     last_error = None
     for client_order in (PLAYER_CLIENTS, {"youtube": {"player_client": ["ios", "android", "web"]}}):
         try:
-            with yt_dlp.YoutubeDL(_base_opts({"extractor_args": client_order})) as ydl:
+            with _yt_dlp().YoutubeDL(_base_opts({"extractor_args": client_order})) as ydl:
                 info = ydl.extract_info(url, download=False)
 
             formats = []
@@ -138,7 +146,7 @@ def resolve_direct(url: str, format_id: str) -> dict:
     last_error = None
     for client_order in (PLAYER_CLIENTS, {"youtube": {"player_client": ["ios", "android", "web"]}}):
         try:
-            with yt_dlp.YoutubeDL(_base_opts({"format": format_id, "extractor_args": client_order})) as ydl:
+            with _yt_dlp().YoutubeDL(_base_opts({"format": format_id, "extractor_args": client_order})) as ydl:
                 info = ydl.extract_info(url, download=False)
 
             req = info.get("requested_formats")

@@ -22,18 +22,26 @@ package.domain = org.downloadsx
 source.dir = .
 
 # (list) Source files to include (let empty to include all)
-source.include_exts = py,png,jpg,kv,atlas,html,js,css,db
+# NOTE: no `db` -- the APK must NOT bundle database.db. A fresh database is
+# created in the app's private storage on first launch. Shipping a desktop
+# database would leak the developer's download history into the artifact and
+# resurrect stale queued tasks pointing at non-existent /storage paths.
+source.include_exts = py,png,jpg,kv,atlas,html,js,css
 
 # (list) Source files to exclude
-source.exclude_patterns = .git/*,.github/*,buildozer.spec,*.zip,downloads/*,temp/*,logs/*,instance/*,__pycache__/*
+source.exclude_patterns = .git/*,.github/*,buildozer.spec,*.zip,downloads/*,temp/*,logs/*,instance/*,__pycache__/*,*.db,*.db-journal,ci-artifacts/*
 
 # (str) Application versioning (method 1)
-version = 0.1.0
+version = 0.2.0
 
-# (list) Application requirements (must be in p4a's recipes)
-# flask, flask-sqlalchemy, apscheduler, requests and waitress are pure-Python
-# and are bundled directly without needing a recipe.
-requirements = python3,flask,flask-sqlalchemy,yt-dlp,apscheduler,requests,waitress,kivy
+# (list) Application requirements
+# flask, flask-sqlalchemy, sqlalchemy, requests and waitress are pure-Python
+# and are bundled directly without needing a recipe. yt-dlp is pure-Python
+# too, but large (~1000 extractor modules) -- it is the single biggest
+# Python payload in the APK. kivy (with the sdl2 bootstrap below) provides
+# the launcher / status screen; the app UI itself is the Flask web UI.
+# Version pins mirror requirements.txt so desktop and APK behave the same.
+requirements = python3,flask==3.1.3,flask-sqlalchemy==3.1.1,sqlalchemy==2.0.52,yt-dlp==2026.8.19,requests==2.34.2,waitress==3.0.2,kivy
 
 # (str) Presplash / icon
 # (we don't ship one, so leave the defaults)
@@ -47,7 +55,19 @@ orientation = portrait
 fullscreen = 0
 
 # (str) Permissions the app needs on Android
-android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE,WAKE_LOCK,FOREGROUND_SERVICE
+# Keep this minimal: downloads default to the app-specific external dir
+# (no permission needed on Android 10+); MANAGE_EXTERNAL_STORAGE would
+# trigger Play Protect warnings and needs a special Settings grant, and no
+# foreground service is implemented, so both are intentionally omitted.
+android.permissions = INTERNET,ACCESS_NETWORK_STATE,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,WAKE_LOCK
+
+# (list) CPU architectures to build for.
+# arm64-v8a covers virtually every device made since ~2016 and keeps the
+# APK roughly HALF the size of a fat (arm64 + armeabi-v7a) build, because
+# every native library (Python, SDL2, Kivy, OpenSSL, SQLite, ...) is
+# shipped once instead of twice. Only add armeabi-v7a back if you must
+# support 32-bit-only phones -- expect the APK to roughly double in size.
+android.archs = arm64-v8a
 
 # (str) Android API version to target / min
 android.api = 33

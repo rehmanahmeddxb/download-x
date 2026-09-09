@@ -1,6 +1,11 @@
-Flask
-Flask-SQLAlchemy
-yt-dlp>=2024.1
-APScheduler>=3.10
-waitress>=2.1
-requests>=2.28
+# Pinned so desktop runs and the APK build install identical versions.
+# (Unpinned deps are a classic source of "worked yesterday, crashes today"
+# APKs when a new major release slips in.) The same pins are mirrored in
+# buildozer.spec. Bump yt-dlp periodically -- YouTube changes break old
+# versions regularly.
+Flask==3.1.3
+Flask-SQLAlchemy==3.1.1
+SQLAlchemy==2.0.52
+yt-dlp==2026.8.19
+waitress==3.0.2
+requests==2.34.2

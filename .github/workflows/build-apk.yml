@@ -17,10 +17,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  smoke-test:
+    name: Desktop smoke test (fail fast)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install app dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile all sources
+        run: python -m compileall -q .
+
+      - name: Run smoke test
+        # Boots the Flask app, checks every /api/* path used by the
+        # frontend exists, and exercises the API contract. A failure here
+        # would ship as "APK installs but instantly closes / dead UI".
+        run: python .github/smoke_test.py
+
   build-apk:
     name: Build APK (Buildozer / python-for-android)
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    needs: [smoke-test]
     env:
       # Inherited by p4a's hostpython and per-architecture pip subprocesses.
       PIP_CONSTRAINT: ${{ github.workspace }}/.github/build-constraints.txt
@@ -173,6 +201,61 @@ jobs:
           fi
           echo "APK_PATH=$APK" >> "$GITHUB_ENV"
           echo "Built APK: $APK ($(du -h "$APK" | cut -f1))"
+
+      - name: Report APK size and contents
+        # Answers "why is the APK so big?" with data: total size, per-arch
+        # native libs, and the largest bundled entries. Non-fatal by design.
+        run: |
+          set +e
+          mkdir -p ci-artifacts
+          python3 - "$APK_PATH" > ci-artifacts/apk-contents.txt <<'EOF'
+          import os, sys, zipfile
+          apk = sys.argv[1]
+          size_mb = os.path.getsize(apk) / 1024**2
+          print(f"APK: {apk}  ({size_mb:.1f} MB on disk)")
+          with zipfile.ZipFile(apk) as zf:
+              infos = zf.infolist()
+              total_c = sum(i.compress_size for i in infos)
+              total_u = sum(i.file_size for i in infos)
+              print(f"entries: {len(infos)}, "
+                    f"compressed: {total_c/1024**2:.1f} MB, "
+                    f"uncompressed: {total_u/1024**2:.1f} MB")
+              archs = {}
+              for i in infos:
+                  if i.filename.startswith("lib/") and i.filename.endswith(".so"):
+                      parts = i.filename.split("/")
+                      if len(parts) >= 3:
+                          archs[parts[1]] = archs.get(parts[1], 0) + i.compress_size
+              if archs:
+                  print("native libs per ABI (compressed):")
+                  for abi, n in sorted(archs.items()):
+                      print(f"  {abi}: {n/1024**2:.1f} MB")
+              else:
+                  print("WARNING: no lib/<abi>/*.so entries found!")
+              for needle, label in (("database.db", "bundled desktop database"),
+                                    ("__pycache__", "pycache")):
+                  hits = [i.filename for i in infos if needle in i.filename]
+                  if hits:
+                      print(f"WARNING: APK contains {label}: {hits[:5]}")
+              print("largest 30 entries (compressed):")
+              for i in sorted(infos, key=lambda x: -x.compress_size)[:30]:
+                  print(f"  {i.compress_size/1024:9.0f} KB  {i.filename}")
+          EOF
+          cat ci-artifacts/apk-contents.txt
+          {
+            echo "## APK size report"
+            echo '```'
+            cat ci-artifacts/apk-contents.txt
+            echo '```'
+            echo ""
+            echo "### Manifest (aapt, best effort)"
+            AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt 2>/dev/null | head -n 1)
+            if [ -n "$AAPT" ]; then
+              "$AAPT" dump badging "$APK_PATH" 2>/dev/null | head -n 20 || echo "(aapt failed)"
+            else
+              echo "(aapt not found)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Collect failure diagnostics
         if: always()

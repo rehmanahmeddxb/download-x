@@ -6,7 +6,7 @@ from config import Config
 
 def ensure_default_settings():
     """Called once at startup: create the settings row if it doesn't exist."""
-    row = SettingsRecord.query.get(1)
+    row = db.session.get(SettingsRecord, 1)
     if row is None:
         row = SettingsRecord(
             id=1,
@@ -22,7 +22,7 @@ def ensure_default_settings():
 
 
 def get_settings() -> SettingsRecord:
-    row = SettingsRecord.query.get(1)
+    row = db.session.get(SettingsRecord, 1)
     if row is None:
         row = ensure_default_settings()
     return row

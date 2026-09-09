@@ -12,8 +12,10 @@ def add_history_entry(**kwargs) -> HistoryEntry:
     return entry
 
 
-def list_history(search: str = ""):
+def list_history(search: str = "", session_id: str | None = None):
     q = HistoryEntry.query.order_by(HistoryEntry.date_completed.desc())
+    if session_id:
+        q = q.filter_by(session_id=session_id)
     if search:
         like = f"%{search}%"
         q = q.filter(
@@ -23,7 +25,7 @@ def list_history(search: str = ""):
 
 
 def delete_history_entry(entry_id: int) -> bool:
-    entry = HistoryEntry.query.get(entry_id)
+    entry = db.session.get(HistoryEntry, entry_id)
     if not entry:
         return False
     db.session.delete(entry)
