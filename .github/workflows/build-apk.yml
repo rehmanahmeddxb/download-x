@@ -99,6 +99,27 @@ jobs:
             echo "Cached SDK looks usable (or absent, will be installed)."
           fi
 
+      - name: Record toolchain information
+        run: |
+          set -o pipefail
+          mkdir -p ci-artifacts
+          {
+            echo "## Toolchain"
+            date --iso-8601=seconds
+            uname -a
+            echo "\n### Python"
+            python --version
+            pip --version
+            echo "\n### Java"
+            java -version 2>&1
+            echo "\n### Build tools"
+            buildozer --version
+            cython --version
+            git --version
+            echo "\n### Android environment"
+            env | grep -E '^(ANDROID|JAVA|PATH|CCACHE)' | sort || true
+          } | tee ci-artifacts/toolchain.txt
+
       - name: Build APK with Buildozer
         env:
           # Use ccache to make rebuilds much faster.
@@ -106,15 +127,16 @@ jobs:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
         run: |
           set -o pipefail
+          mkdir -p ci-artifacts
           # `buildozer -v android debug` builds a debug APK. Switch to
           # `release` once you have a keystore configured.
-          # Tee all output to buildozer.log so the log can be uploaded as
-          # an artifact (and the failure tail surfaced as annotations)
-          # even when the build fails.
-          buildozer -v android debug 2>&1 | tee "${{ github.workspace }}/buildozer.log"
+          # Keep the complete verbose log even when Buildozer fails. This is
+          # uploaded below with the SDK/build diagnostics for easy triage,
+          # and the failure cause is also surfaced as check annotations.
+          buildozer -v android debug 2>&1 | tee ci-artifacts/buildozer.log
           # Collect whatever APK buildozer produced.
-          ls -la bin/ 2>/dev/null || true
-          find . -maxdepth 3 -name "*.apk" -print
+          ls -la bin/ 2>&1 | tee -a ci-artifacts/buildozer.log || true
+          find . -maxdepth 3 -name "*.apk" -print | tee -a ci-artifacts/buildozer.log || true
 
       - name: Surface build failure cause
         # When the build step fails, the console log alone can be hard to
@@ -123,7 +145,7 @@ jobs:
         # annotations so the root cause is visible via the API / checks UI.
         if: failure()
         run: |
-          LOG="${{ github.workspace }}/buildozer.log"
+          LOG="${{ github.workspace }}/ci-artifacts/buildozer.log"
           echo "===== log size ====="
           wc -l "$LOG" 2>/dev/null || echo "(no buildozer.log found)"
           { echo "--- df ---"; df -h / /tmp 2>/dev/null; echo "--- du ---"; du -sh "${{ github.workspace }}/.buildozer" "$HOME/.buildozer" 2>/dev/null; } > /tmp/disk.txt 2>&1 || true
@@ -181,21 +203,10 @@ jobs:
           emit("tail", [f"{i+1}: {lines[i][:400]}" for i in range(max(0, n - 12), n)])
           EOF
 
-      - name: Upload build log (always)
-        # Guarantee the run produces *some* artifact even on failure, so a
-        # failed build is always diagnosable from the Actions UI.
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: downloadsx-build-log
-          path: buildozer.log
-          if-no-files-found: warn
-          retention-days: 14
-
       - name: Verify APK was produced
         run: |
           set -e
-          APK=$(ls -1 bin/*.apk 2>/dev/null | head -n 1)
+          APK=$(ls -1 bin/*.apk 2>/dev/null | head -n 1 || true)
           if [ -z "$APK" ]; then
             echo "::error::No APK file found in bin/. Build may have failed."
             ls -la
@@ -204,13 +215,42 @@ jobs:
           echo "APK_PATH=$APK" >> "$GITHUB_ENV"
           echo "Built APK: $APK ($(du -h "$APK" | cut -f1))"
 
+      - name: Collect failure diagnostics
+        if: always()
+        run: |
+          mkdir -p ci-artifacts
+          {
+            echo "## Build diagnostics"
+            echo "Workflow: $GITHUB_WORKFLOW"
+            echo "Run: $GITHUB_RUN_ID"
+            echo "Commit: $GITHUB_SHA"
+            echo "Runner: $RUNNER_OS / $RUNNER_ARCH"
+            echo "\n### Workspace"
+            df -h
+            du -sh .buildozer 2>/dev/null || true
+            find bin .buildozer -maxdepth 3 -type f \( -name '*.apk' -o -name '*.log' \) -print 2>/dev/null | head -100 || true
+            echo "\n### Recent Buildozer logs"
+            find .buildozer -type f -name '*.log' -print -exec tail -200 {} \; 2>/dev/null | tail -2000 || true
+          } > ci-artifacts/diagnostics.txt
+
       - name: Upload APK as workflow artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: downloadsx-apk
+          name: downloadsx-apk-${{ github.run_number }}
           path: ${{ env.APK_PATH }}
           if-no-files-found: error
           retention-days: 30
+
+      - name: Upload build report and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: downloadsx-build-report-${{ github.run_number }}
+          path: ci-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
+          compression-level: 6
 
       - name: Attach APK to GitHub Release (tag pushes only)
         if: startsWith(github.ref, 'refs/tags/v')
