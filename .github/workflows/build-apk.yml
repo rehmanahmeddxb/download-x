@@ -69,6 +69,9 @@ jobs:
             openjdk-17-jdk-headless \
             wget \
             curl
+          # sdkmanager / Gradle need a JDK on PATH; export JAVA_HOME too.
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> "$GITHUB_ENV"
+          java -version
 
       - name: Install Buildozer
         run: |
@@ -93,12 +96,55 @@ jobs:
           USE_CCACHE: "1"
           CCACHE_DIR: ${{ github.workspace }}/.ccache
         run: |
+          set -o pipefail
           # `buildozer -v android debug` builds a debug APK. Switch to
           # `release` once you have a keystore configured.
-          buildozer -v android debug
+          # Tee all output to buildozer.log so the log can be uploaded as
+          # an artifact (and the failure tail surfaced as annotations)
+          # even when the build fails.
+          buildozer -v android debug 2>&1 | tee "${{ github.workspace }}/buildozer.log"
           # Collect whatever APK buildozer produced.
           ls -la bin/ 2>/dev/null || true
           find . -maxdepth 3 -name "*.apk" -print
+
+      - name: Surface build failure tail
+        # When the build step fails, the console log alone can be hard to
+        # retrieve; emit the tail of buildozer.log as check annotations so
+        # the root cause is visible via the API / checks UI.
+        if: failure()
+        run: |
+          LOG="${{ github.workspace }}/buildozer.log"
+          echo "===== last 100 lines of buildozer.log ====="
+          tail -n 100 "$LOG" 2>/dev/null || echo "(no buildozer.log found)"
+          python3 - "$LOG" <<'EOF'
+          import sys
+          try:
+              with open(sys.argv[1], errors="replace") as f:
+                  lines = f.read().splitlines()
+          except OSError:
+              print("::error::buildozer.log not found; build failed before logging started")
+              sys.exit(0)
+          tail = lines[-80:]
+          base = len(lines) - len(tail)
+          def esc(s):
+              return s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+          # Emit in ~15-line chunks (annotation size limits).
+          for i in range(0, len(tail), 15):
+              chunk = tail[i:i + 15]
+              lo, hi = base + i + 1, base + i + len(chunk)
+              print(f"::error::buildozer failed (log lines {lo}-{hi}):%0A{esc(chr(10).join(chunk))}")
+          EOF
+
+      - name: Upload build log (always)
+        # Guarantee the run produces *some* artifact even on failure, so a
+        # failed build is always diagnosable from the Actions UI.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: downloadsx-build-log
+          path: buildozer.log
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Verify APK was produced
         run: |

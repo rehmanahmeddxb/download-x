@@ -59,8 +59,17 @@ android.ndk_api = 21
 # (bool) Use legacy build (may be needed on older p4a versions)
 # android.use_legacy_build = True
 
-# (str) Android entry point - we use our main.py
-android.entrypoint = org.downloadsx.downloadsx.MainActivity
+# (bool) Automatically accept every Android SDK licence via
+# `sdkmanager --licenses`. This is more robust than pre-seeding licence
+# hash files (Google rotates the licence text), and is required for
+# non-interactive CI builds.
+android.accept_sdk_license = True
+
+# (str) Android entry point.
+# NOTE: leave this unset so Buildozer uses the sdl2 bootstrap default
+# (org.kivy.android.PythonActivity). Pointing it at a non-existent activity
+# class breaks the Gradle build.
+# android.entrypoint = org.kivy.android.PythonActivity
 
 # (str) Bootstrap to use
 android.bootstrap = sdl2
