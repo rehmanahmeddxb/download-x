@@ -39,3 +39,38 @@ It:
 The first run downloads the Android SDK / NDK and builds all native
 recipes from source, so it can take 30-60 minutes. Subsequent runs are
 much faster thanks to the cache.
+
+### Android SDK setup in CI
+
+The workflow checks the runner's Android command-line tools and copies them into
+Buildozer's SDK at `tools/bin/sdkmanager` before starting the build.
+`android.accept_sdk_license = True` lets Buildozer accept license prompts while
+installing SDK packages. Do not create an SDK directory containing only license
+files: Buildozer treats an existing directory as an installed SDK and then fails
+with `sdkmanager ... does not exist`.
+
+The `buildozer-sdk-v3` cache namespace avoids restoring the previous incomplete
+SDK setup and cross-SDK symlinks. Both Android environment variables point to
+the Buildozer SDK so platform installation and discovery use the same root.
+If a build fails, download the `downloadsx-build-report-<run number>`
+artifact for the full Buildozer log and diagnostics.
+
+### Native build prerequisites and pip compatibility
+
+Install the complete apt package list in the workflow, including `automake`,
+`libltdl-dev`, `cmake`, and `zlib1g-dev`. The preflight checks for the
+`LT_SYS_SYMBOL_USCORE` macro used by libffi; installing `libtool` alone is not
+enough.
+
+CI uses `.github/build-constraints.txt` for Buildozer and every pip subprocess.
+The pinned python-for-android revision builds CPython 3.14.2, whose bundled pip
+is 25.3. Keep these versions aligned: p4a reuses its virtual environment for
+both architectures, and re-running its patched ensurepip over pip 26.x can
+leave mixed pip files (`ImportError: BuildDependencyInstallError`). For local
+builds with this toolchain, export the same constraint before installing tools:
+
+```bash
+export PIP_CONSTRAINT="$PWD/.github/build-constraints.txt"
+python -m pip install --upgrade pip buildozer cython
+buildozer android debug
+```

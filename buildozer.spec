@@ -53,17 +53,25 @@ android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE,READ_EXTER
 android.api = 33
 android.minapi = 21
 
+# (bool) Let Buildozer accept SDK licenses while installing real SDK packages.
+# Do not pre-create a licenses-only SDK directory: it skips SDK installation.
+android.accept_sdk_license = True
+
 # (int) Target Android SDK
 android.ndk_api = 21
 
 # (bool) Use legacy build (may be needed on older p4a versions)
 # android.use_legacy_build = True
 
-# (str) Android entry point - we use our main.py
-android.entrypoint = org.downloadsx.downloadsx.MainActivity
+# (str) Java activity supplied by the SDL2 bootstrap (Python starts in main.py).
+android.entrypoint = org.kivy.android.PythonActivity
 
 # (str) Bootstrap to use
-android.bootstrap = sdl2
+p4a.bootstrap = sdl2
+
+# Keep the Python/hostpython recipes (3.14.2) in sync with CI's pip constraint.
+p4a.branch = master
+p4a.commit = 58d21141f17c889bf8585f5665921d72028f8831
 
 # (list) Android additional libraries
 # p4a.archives =
