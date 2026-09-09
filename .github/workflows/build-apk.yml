@@ -62,8 +62,12 @@ jobs:
             python3-pip \
             python3-venv \
             autoconf \
+            automake \
             libtool \
+            libltdl-dev \
             pkg-config \
+            cmake \
+            zlib1g-dev \
             unzip \
             zip \
             openjdk-17-jdk-headless \
@@ -139,17 +143,8 @@ jobs:
               for j in range(0, len(numbered), 12):
                   chunk = numbered[j:j + 12]
                   print(f"::error::buildozer {title}:%0A{esc(chr(10).join(chunk))}")
-          # 1) Python tracebacks with context (the real exception is at the end).
-          tb_idx = [i for i, ln in enumerate(lines) if "Traceback (most recent call last)" in ln]
-          if tb_idx:
-              i = tb_idx[-1]
-              emit("traceback", [f"{k+1}: {lines[k]}" for k in range(i, min(i + 25, n))])
-          else:
-              emit("traceback", ["(no Python traceback in log)"])
-          # 2) Last buildozer/p4a commands that were executed.
-          runs = [i for i, ln in enumerate(lines) if ln.strip().startswith(("# Run ", "# Command failed"))]
-          emit("last-commands", [f"{i+1}: {lines[i][:400]}" for i in runs[-6:]] or ["(no '# Run' lines)"])
-          # 3) Error-pattern matches (numbered, deduped, most recent last).
+          # NOTE: annotations display newest-first, so emit least-important first.
+          # 1) Error-pattern matches (numbered, deduped, most recent last).
           pats = re.compile(r"Error|ERROR|FAILED|Failed|failed to|Exception|FATAL|Caused by|BUILD FAILED|Recipe .* failed|not found|No such|Cannot |Conflict|Unsatisfiable|returned non-zero|exit code|raise |undefined reference|ld returned")
           seen, hits = set(), []
           for i, ln in enumerate(lines):
@@ -159,8 +154,22 @@ jobs:
               if pats.search(s) and s not in seen:
                   seen.add(s)
                   hits.append(f"{i+1}: {s[:400]}")
-          emit("error-scan", hits[-48:] or ["(no error-pattern matches)"])
-          # 4) Raw tail for context.
+          emit("error-scan", hits[-24:] or ["(no error-pattern matches)"])
+          # 2) Last buildozer/p4a commands that were executed.
+          runs = [i for i, ln in enumerate(lines) if ln.strip().startswith(("# Run ", "# Command failed"))]
+          emit("last-commands", [f"{i+1}: {lines[i][:400]}" for i in runs[-6:]] or ["(no '# Run' lines)"])
+          # 3) Python traceback (the real exception is at its end).
+          tb_idx = [i for i, ln in enumerate(lines) if "Traceback (most recent call last)" in ln]
+          if tb_idx:
+              i = tb_idx[-1]
+              emit("traceback", [f"{k+1}: {lines[k]}" for k in range(i, min(i + 20, n))])
+              # 4) The ~48 lines BEFORE the traceback: this is where the
+              # failing command's stderr/stdout actually appears.
+              lo = max(0, i - 48)
+              emit("pre-traceback", [f"{k+1}: {lines[k][:400]}" for k in range(lo, i)])
+          else:
+              emit("traceback", ["(no Python traceback in log)"])
+          # 5) Raw tail for context.
           emit("tail", [f"{i+1}: {lines[i][:400]}" for i in range(max(0, n - 12), n)])
           EOF
 
