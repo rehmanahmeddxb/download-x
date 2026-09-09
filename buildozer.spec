@@ -63,11 +63,11 @@ android.ndk_api = 21
 # (bool) Use legacy build (may be needed on older p4a versions)
 # android.use_legacy_build = True
 
-# (str) Android entry point - we use our main.py
-android.entrypoint = org.downloadsx.downloadsx.MainActivity
+# (str) Java activity supplied by the SDL2 bootstrap (Python starts in main.py).
+android.entrypoint = org.kivy.android.PythonActivity
 
 # (str) Bootstrap to use
-android.bootstrap = sdl2
+p4a.bootstrap = sdl2
 
 # (list) Android additional libraries
 # p4a.archives =

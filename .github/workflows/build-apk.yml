@@ -63,13 +63,31 @@ jobs:
             python3-pip \
             python3-venv \
             autoconf \
+            automake \
             libtool \
+            libltdl-dev \
+            cmake \
+            zlib1g-dev \
             pkg-config \
             unzip \
             zip \
             openjdk-17-jdk-headless \
             wget \
             curl
+
+      - name: Verify native build prerequisites
+        # libffi's autogen.sh needs ltdl.m4 from libltdl-dev. libtool alone
+        # does not provide LT_SYS_SYMBOL_USCORE on a minimal runner.
+        run: |
+          set -euo pipefail
+          for tool in autoconf automake aclocal libtoolize cmake; do
+            command -v "$tool"
+          done
+          LTDL_M4="$(aclocal --print-ac-dir)/ltdl.m4"
+          if ! grep -q 'AC_DEFUN(\[LT_SYS_SYMBOL_USCORE\]' "$LTDL_M4"; then
+            echo "::error::Missing LT_SYS_SYMBOL_USCORE macro; install libltdl-dev"
+            exit 1
+          fi
 
       - name: Install Buildozer
         run: |
@@ -93,7 +111,7 @@ jobs:
           # Do not symlink tools across SDK roots: avdmanager resolves the
           # symlink and reports platforms from the runner SDK instead.
           if [ ! -d "$SDK_ROOT/tools" ]; then
-            cp -a "$SDK_TOOLS" "$SDK_ROOT/tools"
+            cp -a "$SDK_TOOLS/." "$SDK_ROOT/tools"
           fi
           export ANDROID_HOME="$SDK_ROOT"
           export ANDROID_SDK_ROOT="$SDK_ROOT"
