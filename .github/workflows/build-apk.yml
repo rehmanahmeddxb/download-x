@@ -28,7 +28,7 @@ jobs:
           python-version: "3.11"
 
       - name: Cache Buildozer / p4a build
-        # v2 avoids restoring the old licenses-only SDK directory.
+        # v3 avoids restoring licenses-only SDKs or cross-SDK tool symlinks.
         # Speeds up repeat builds by caching ~/.buildozer (downloaded
         # Android SDK / NDK / recipes / .gradle outputs). The first run
         # will still be slow because everything has to be downloaded.
@@ -37,9 +37,9 @@ jobs:
           path: |
             ~/.buildozer
             ~/Library/buildozer
-          key: ${{ runner.os }}-buildozer-sdk-v2-${{ hashFiles('buildozer.spec', 'requirements.txt', 'main.py', '.github/workflows/build-apk.yml') }}
+          key: ${{ runner.os }}-buildozer-sdk-v3-${{ hashFiles('buildozer.spec', 'requirements.txt', 'main.py', '.github/workflows/build-apk.yml') }}
           restore-keys: |
-            ${{ runner.os }}-buildozer-sdk-v2-
+            ${{ runner.os }}-buildozer-sdk-v3-
 
       - name: Install Buildozer system dependencies
         # python-for-android needs these system packages on Ubuntu to
@@ -78,7 +78,7 @@ jobs:
 
       - name: Prepare Android SDK tools
         # A licenses-only SDK directory makes Buildozer skip SDK installation.
-        # Use the runner's installed command-line tools, exposed at the legacy
+        # Copy the runner's command-line tools into this SDK at the legacy
         # tools/bin path expected by Buildozer 1.6. License prompts are handled
         # by android.accept_sdk_license in buildozer.spec, not fabricated files.
         run: |
@@ -90,9 +90,15 @@ jobs:
             exit 1
           fi
           mkdir -p "$SDK_ROOT"
-          if [ ! -e "$SDK_ROOT/tools" ]; then
-            ln -sfnT "$SDK_TOOLS" "$SDK_ROOT/tools"
+          # Do not symlink tools across SDK roots: avdmanager resolves the
+          # symlink and reports platforms from the runner SDK instead.
+          if [ ! -d "$SDK_ROOT/tools" ]; then
+            cp -a "$SDK_TOOLS" "$SDK_ROOT/tools"
           fi
+          export ANDROID_HOME="$SDK_ROOT"
+          export ANDROID_SDK_ROOT="$SDK_ROOT"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
           "$SDK_ROOT/tools/bin/sdkmanager" --sdk_root="$SDK_ROOT" --version
 
       - name: Record toolchain information
