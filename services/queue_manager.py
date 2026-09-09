@@ -6,8 +6,6 @@ import os
 import threading
 import time
 
-import yt_dlp
-
 from extensions import db
 from models.download import Download
 from services.settings_service import get_settings
@@ -16,6 +14,14 @@ from utils.logger import get_logger
 from utils.validators import sanitize_filename
 
 PLAYER_CLIENTS = {"youtube": {"player_client": ["android", "ios", "web"]}}
+
+
+def _yt_dlp():
+    """Lazily import yt-dlp so the app can still boot (and report a clear
+    error) on builds where the optional dependency failed to bundle."""
+    import yt_dlp  # noqa: PLC0415 (intentional lazy import)
+
+    return yt_dlp
 
 
 class PauseRequested(Exception):
@@ -50,6 +56,15 @@ class QueueManager:
         stuck = Download.query.filter_by(status="downloading").all()
         for t in stuck:
             t.status = "queued"
+            t.pause_flag = False
+        db.session.commit()
+
+    def mark_incomplete_paused(self):
+        """Park tasks stuck 'downloading' as 'paused' (used when the user
+        disabled auto-resume) instead of silently re-queueing them."""
+        stuck = Download.query.filter_by(status="downloading").all()
+        for t in stuck:
+            t.status = "paused"
             t.pause_flag = False
         db.session.commit()
 
@@ -95,7 +110,7 @@ class QueueManager:
         return task
 
     def pause(self, task_id):
-        task = Download.query.get(task_id)
+        task = db.session.get(Download, task_id)
         if not task:
             return False
         if task.status == "downloading":
@@ -106,7 +121,7 @@ class QueueManager:
         return True
 
     def resume(self, task_id):
-        task = Download.query.get(task_id)
+        task = db.session.get(Download, task_id)
         if not task or task.status != "paused":
             return False
         task.status = "queued"
@@ -115,7 +130,7 @@ class QueueManager:
         return True
 
     def cancel(self, task_id):
-        task = Download.query.get(task_id)
+        task = db.session.get(Download, task_id)
         if not task:
             return False
         if task.status == "downloading":
@@ -126,7 +141,7 @@ class QueueManager:
         return True
 
     def retry(self, task_id):
-        task = Download.query.get(task_id)
+        task = db.session.get(Download, task_id)
         if not task or task.status not in ("failed", "cancelled"):
             return False
         task.status = "queued"
@@ -137,7 +152,7 @@ class QueueManager:
         return True
 
     def remove(self, task_id):
-        task = Download.query.get(task_id)
+        task = db.session.get(Download, task_id)
         if not task or task.status == "downloading":
             return False
         db.session.delete(task)
@@ -145,7 +160,7 @@ class QueueManager:
         return True
 
     def reprioritize(self, task_id, direction):
-        task = Download.query.get(task_id)
+        task = db.session.get(Download, task_id)
         if not task:
             return False
         neighbor_query = Download.query.filter_by(status="queued")
@@ -214,7 +229,7 @@ class QueueManager:
 
     def _progress_hook(self, d, task_id):
         with self.app.app_context():
-            task = Download.query.get(task_id)
+            task = db.session.get(Download, task_id)
             if not task:
                 return
             if task.cancel_flag:
@@ -242,10 +257,36 @@ class QueueManager:
                 task.progress = 100.0
                 db.session.commit()
 
+    @staticmethod
+    def _resolve_output_file(ydl, info, task):
+        """Best-effort path of the finished file.
+
+        ``prepare_filename`` doesn't account for postprocessor / merge
+        extension changes (e.g. .webm -> .mp4, audio -> .mp3), so probe
+        the likely variants and return whichever exists on disk.
+        """
+        try:
+            primary = ydl.prepare_filename(info or {})
+        except Exception:
+            primary = ""
+        if primary and os.path.isfile(primary):
+            return primary
+        base, _ext = os.path.splitext(primary or "")
+        if not base:
+            return primary
+        audio_only = (
+            getattr(task, "format_id", "") == "bestaudio/best"
+            or getattr(task, "quality_label", "") == "Audio Only (MP3)"
+        )
+        for ext in (".mp3", ".m4a") if audio_only else (".mp4", ".mkv", ".webm"):
+            if os.path.isfile(base + ext):
+                return base + ext
+        return primary
+
     def _run_download(self, task_id):
         try:
             with self.app.app_context():
-                task = Download.query.get(task_id)
+                task = db.session.get(Download, task_id)
                 if not task:
                     return
                 settings = get_settings()
@@ -253,12 +294,14 @@ class QueueManager:
                 opts = self._build_opts(task, settings)
                 url = task.url
 
-            with yt_dlp.YoutubeDL(opts) as ydl:
+            with _yt_dlp().YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=True)
-                out_file = ydl.prepare_filename(info)
+                out_file = self._resolve_output_file(ydl, info, task)
 
             with self.app.app_context():
-                task = Download.query.get(task_id)
+                task = db.session.get(Download, task_id)
+                if not task:  # removed while downloading
+                    return
                 task.status = "completed"
                 task.progress = 100.0
                 task.output_file = out_file
@@ -275,7 +318,7 @@ class QueueManager:
 
         except PauseRequested:
             with self.app.app_context():
-                task = Download.query.get(task_id)
+                task = db.session.get(Download, task_id)
                 if task:
                     task.status = "paused"
                     task.pause_flag = False
@@ -283,15 +326,26 @@ class QueueManager:
 
         except CancelRequested:
             with self.app.app_context():
-                task = Download.query.get(task_id)
+                task = db.session.get(Download, task_id)
                 if task:
                     task.status = "cancelled"
                     task.cancel_flag = False
                     db.session.commit()
 
+        except ImportError as ex:
+            # yt-dlp (or one of its imports) is missing from this build --
+            # retrying is pointless, fail fast with a clear message.
+            with self.app.app_context():
+                task = db.session.get(Download, task_id)
+                if task:
+                    task.status = "failed"
+                    task.error_message = f"Downloader engine unavailable: {ex}"
+                    db.session.commit()
+                get_logger().error(f"Download engine missing: {ex}")
+
         except Exception as ex:
             with self.app.app_context():
-                task = Download.query.get(task_id)
+                task = db.session.get(Download, task_id)
                 if not task:
                     return
                 settings = get_settings()

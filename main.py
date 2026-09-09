@@ -7,8 +7,12 @@ renders the UI. No Kivy / SDL needed -- which is also what keeps the APK
 small.
 
 Crash-proofing:
+  * ``faulthandler`` prints a Python traceback to logcat even on segfaults,
   * every exception (including in background threads) is appended to
     ``<LOG_DIR>/crash.log`` and printed (visible via ``adb logcat``),
+  * the Flask/app imports happen *inside* the guarded server loop, so a
+    broken dependency shows up in crash.log instead of killing the
+    process before the hooks are even installed,
   * if the Flask server ever exits or fails to start, it is restarted
     with backoff instead of taking the whole app down,
   * the main thread never returns, so the process (and the daemon server
@@ -18,6 +22,7 @@ Running ``python main.py`` on a desktop does the same thing and then
 opens the system browser -- handy for debugging the exact code path the
 APK uses.
 """
+import faulthandler
 import os
 import sys
 import threading
@@ -25,13 +30,19 @@ import time
 import traceback
 import urllib.request
 
+# Print fatal tracebacks (segfaults etc.) to stderr (= logcat on Android).
+faulthandler.enable()
+
 # Make sure the project root is on sys.path so the `app`, `config`,
 # `services`, `routes`, etc. packages can be imported normally.
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from app import create_app  # noqa: E402  (intentional after sys.path tweak)
+# NOTE: `config` is intentionally imported here (it is pure stdlib and
+# cannot fail), but `app` is imported lazily inside _serve_forever so a
+# broken dependency lands in crash.log instead of killing the process
+# before the crash hooks below are installed.
 from config import Config, is_android  # noqa: E402
 
 CRASH_LOG = os.path.join(Config.LOG_DIR, "crash.log")
@@ -98,6 +109,8 @@ def _serve_forever() -> None:
                 f"[ytdlx] starting server on {Config.HOST}:{Config.PORT}",
                 flush=True,
             )
+            from app import create_app  # lazy: see module docstring
+
             flask_app = create_app()
             backoff = 2  # a clean start resets the backoff
             # threaded=True so the WebView can poll /api/* while yt-dlp

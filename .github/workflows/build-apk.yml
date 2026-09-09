@@ -17,10 +17,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  smoke-test:
+    name: Desktop smoke test (fail fast)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install app dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile all sources
+        run: python -m compileall -q .
+
+      - name: Run smoke test
+        # Boots the Flask app, checks every /api/* path used by the
+        # frontend exists, and exercises the API contract. A failure here
+        # would ship as "APK installs but instantly closes / dead UI".
+        run: python .github/smoke_test.py
+
+      - name: Check APK file blacklist is up to date
+        # The yt-dlp section of p4a-blacklist.txt is generated from the
+        # pinned yt-dlp; fail if it drifted instead of shipping stale patterns.
+        run: python .github/generate_blacklist.py --check
+
+      - name: Validate APK file blacklist
+        # Simulates the APK packer's file strip and re-runs the whole smoke
+        # suite against the stripped tree. Catches "stripped a file the app
+        # needs" without waiting 40 minutes for an APK that crashes on boot.
+        run: python .github/strip_check.py
+
   build-apk:
     name: Build APK (Buildozer / python-for-android)
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    needs: [smoke-test]
     env:
       # Inherited by p4a's hostpython and per-architecture pip subprocesses.
       PIP_CONSTRAINT: ${{ github.workspace }}/.github/build-constraints.txt
@@ -187,7 +226,14 @@ jobs:
             echo ""
             echo "### Totals by top-level folder"
             unzip -l "$APK" | awk '{print $4}' | cut -d/ -f1 | sort | uniq -c | sort -rn
+            echo ""
+            echo "### Red flags (should all be empty)"
+            for needle in database.db __pycache__ kivy/ chardet/; do
+              hits=$(unzip -l "$APK" | grep -c "$needle" || true)
+              echo "$needle: $hits entries"
+            done
           } | tee ci-artifacts/apk-size.txt
+          cat ci-artifacts/apk-size.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Collect failure diagnostics
         if: always()

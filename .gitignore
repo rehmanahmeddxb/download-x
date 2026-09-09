@@ -23,7 +23,10 @@ logs/*
 !logs/.gitkeep
 instance/*
 !instance/.gitkeep
-database.db-journal
+# Never commit the SQLite database: it contains the user's download
+# history and machine-specific paths, and must not ship inside the APK.
+*.db
+*.db-journal
 
 # IDE
 .idea/

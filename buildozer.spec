@@ -10,13 +10,15 @@
 #   * `webview` bootstrap instead of SDL2/Kivy -- the UI is a native Android
 #     WebView pointed at the bundled Flask server, so the whole game-engine
 #     stack (~20 MB) and the Kivy dependency are gone.
-#   * Minimal `requirements`: only what the code actually imports
-#     (Flask + Flask-SQLAlchemy + yt-dlp).
+#   * Minimal `requirements`: only what the code actually imports.
 #   * Single 64-bit ABI (`android.archs = arm64-v8a`). Add `armeabi-v7a`
 #     only if you must support 32-bit-only devices -- it roughly doubles
 #     the native-code size.
 #   * The desktop `database.db` is never packaged; the app creates a fresh
 #     database in its private storage on first launch.
+#   * `p4a-blacklist.txt` strips dead weight out of the Python bundle
+#     (non-YouTube yt-dlp extractors, SQLAlchemy test helpers and
+#     non-SQLite dialects, bytecode caches).
 # ---------------------------------------------------------------------------
 
 [app]
@@ -34,6 +36,10 @@ package.domain = org.downloadsx
 source.dir = .
 
 # (list) Source files to include (let empty to include all)
+# NOTE: no `db` -- the APK must NOT bundle database.db. A fresh database is
+# created in the app's private storage on first launch. Shipping a desktop
+# database would leak download history into the artifact and resurrect
+# stale queued tasks pointing at non-existent /storage paths.
 source.include_exts = py,png,jpg,html,js,css
 
 # (list) Source files to exclude
@@ -46,10 +52,40 @@ version = 0.2.0
 # APK as an upgrade over the previously installed one.
 android.numeric_version = 2
 
-# (list) Application requirements -- keep minimal: only packages the code
-# actually imports. flask, flask-sqlalchemy and yt-dlp are pure-Python and
-# are bundled directly without needing a recipe.
-requirements = python3,flask,flask-sqlalchemy,yt-dlp
+# (list) Application requirements -- keep minimal AND complete: only
+# packages the code actually imports, but ALL of them, including
+# transitive pure-Python deps. p4a's automatic pip-dependency resolution
+# silently drops packages it cannot fetch for Android (notably SQLAlchemy,
+# which ships no Android wheel), so an unlisted dep simply ends up missing
+# from the APK -- and the app then dies with ModuleNotFoundError on launch
+# (or, with the webview bootstrap, spins on the loading screen forever).
+# What each entry is for:
+#   flask                  recipe (pulls jinja2/werkzeug/markupsafe/itsdangerous/click/blinker)
+#   flask-sqlalchemy       pip, pure -- ORM integration (needs sqlalchemy below)
+#   sqlalchemy             recipe -- ORM, compiled C extensions for ARM
+#   typing-extensions      pip, pure -- imported unconditionally by sqlalchemy
+#   yt-dlp                 pip, pure -- download engine (only the YouTube
+#                          extractor stack is kept; the other ~930 site
+#                          modules are stripped by p4a-blacklist.txt)
+#   certifi                pip, pure -- TLS CA bundle. Android ships no usable
+#                          system CA path for Python's ssl module, so without
+#                          this every YouTube fetch/download fails with
+#                          "certificate verify failed" (yt-dlp prefers certifi
+#                          when present; config.py also exports SSL_CERT_FILE
+#                          so stdlib urllib uses it too).
+# Deliberately absent: Kivy (webview bootstrap needs no UI toolkit),
+# waitress (Flask's threaded dev server is enough for a loopback server),
+# requests (direct streaming uses stdlib urllib), APScheduler (unused),
+# mutagen (thumbnail embedding needs ffmpeg anyway -- absent on Android).
+# Version pins mirror requirements.txt so desktop and APK behave the same.
+requirements = python3,flask==3.1.3,flask-sqlalchemy==3.1.1,sqlalchemy==2.0.52,typing-extensions==4.16.0,yt-dlp==2026.8.19,certifi==2026.7.22
+
+# (str) p4a file blacklist: fnmatch patterns for files to LEAVE OUT of the
+# APK (see above). p4a appends this file to its built-in defaults, so
+# p4a-blacklist.txt only lists OUR strips. It is partly generated -- see
+# .github/generate_blacklist.py -- and validated without building an APK
+# by .github/strip_check.py (runs in CI).
+android.blacklist_src = p4a-blacklist.txt
 
 # (str) Presplash / icon
 # (we don't ship one, so leave the defaults)

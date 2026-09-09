@@ -89,10 +89,8 @@
 
 {% block scripts %}
 <script>
-  // Lightweight client-side handler: validate, show a success toast, and
-  // reset the form. The actual email submission would POST to /api/contact,
-  // which can be added server-side later without changing this UI.
-  document.getElementById('contactForm').addEventListener('submit', function (e) {
+  // Validates locally, POSTs to /api/contact, and reports the real result.
+  document.getElementById('contactForm').addEventListener('submit', async function (e) {
     e.preventDefault();
     const form = e.currentTarget;
     if (!form.checkValidity()) {
@@ -103,8 +101,22 @@
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending...';
 
-    // Simulated send. Replace with: fetch('/api/contact', {method:'POST', body:...})
-    setTimeout(() => {
+    const payload = {
+      name: form.name.value.trim(),
+      email: form.email.value.trim(),
+      subject: form.subject.value,
+      message: form.message.value.trim(),
+    };
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json();
+      if (!res.ok || result.error) {
+        throw new Error(result.error || 'Server rejected the message.');
+      }
       Swal.fire({
         icon: 'success',
         title: 'Message sent',
@@ -114,9 +126,18 @@
       });
       form.reset();
       form.classList.remove('was-validated');
+    } catch (err) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Could not send',
+        text: err.message || 'Network error. Please try again.',
+        background: '#111',
+        color: '#eee',
+      });
+    } finally {
       btn.disabled = false;
       btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send message';
-    }, 700);
+    }
   });
 </script>
 {% endblock %}
