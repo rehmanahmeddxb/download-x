@@ -1,0 +1,5 @@
+# Keep pip aligned with ensurepip in p4a's CPython 3.14.2 host recipe.
+# p4a reuses a venv across Android architectures; its patched ensurepip can
+# otherwise overlay bundled pip 25.3 on pip 26.x, leaving incompatible files.
+pip==25.3
+buildozer==1.6.0

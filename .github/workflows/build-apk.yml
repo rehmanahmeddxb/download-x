@@ -12,11 +12,18 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-apk:
     name: Build APK (Buildozer / python-for-android)
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    env:
+      # Inherited by p4a's hostpython and per-architecture pip subprocesses.
+      PIP_CONSTRAINT: ${{ github.workspace }}/.github/build-constraints.txt
 
     steps:
       - name: Checkout repository
@@ -37,7 +44,7 @@ jobs:
           path: |
             ~/.buildozer
             ~/Library/buildozer
-          key: ${{ runner.os }}-buildozer-sdk-v3-${{ hashFiles('buildozer.spec', 'requirements.txt', 'main.py', '.github/workflows/build-apk.yml') }}
+          key: ${{ runner.os }}-buildozer-sdk-v3-${{ hashFiles('buildozer.spec', 'requirements.txt', 'main.py', '.github/workflows/build-apk.yml', '.github/build-constraints.txt') }}
           restore-keys: |
             ${{ runner.os }}-buildozer-sdk-v3-
 

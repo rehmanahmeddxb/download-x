@@ -69,6 +69,10 @@ android.entrypoint = org.kivy.android.PythonActivity
 # (str) Bootstrap to use
 p4a.bootstrap = sdl2
 
+# Keep the Python/hostpython recipes (3.14.2) in sync with CI's pip constraint.
+p4a.branch = master
+p4a.commit = 58d21141f17c889bf8585f5665921d72028f8831
+
 # (list) Android additional libraries
 # p4a.archives =
 # p4a.bootstrap =
