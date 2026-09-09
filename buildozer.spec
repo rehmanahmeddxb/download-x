@@ -30,10 +30,21 @@ source.exclude_patterns = .git/*,.github/*,buildozer.spec,*.zip,downloads/*,temp
 # (str) Application versioning (method 1)
 version = 0.1.0
 
-# (list) Application requirements (must be in p4a's recipes)
-# flask, flask-sqlalchemy, apscheduler, requests and waitress are pure-Python
-# and are bundled directly without needing a recipe.
-requirements = python3,flask,flask-sqlalchemy,yt-dlp,apscheduler,requests,waitress,kivy
+# (list) Architectures to build for. arm64-v8a covers all modern Android
+# devices (Google has required 64-bit since 2019); building only this arch
+# halves CI time/disk and avoids a python-for-android bug where the second
+# arch reuses the first arch's venv with a corrupted pip installation.
+android.archs = arm64-v8a
+
+# (list) Application requirements.
+# python3/flask/sqlalchemy/kivy have p4a recipes and are compiled for ARM.
+# The rest are pure-Python and are bundled directly without needing a recipe.
+# NOTE: p4a installs pip modules with --no-deps, so every transitive runtime
+# dependency must be listed explicitly: sqlalchemy (for flask-sqlalchemy),
+# typing-extensions (for sqlalchemy), tzlocal/pytz/six (for apscheduler),
+# charset-normalizer (for modern requests; p4a's kivy recipe only pulls the
+# obsolete chardet).
+requirements = python3,flask,flask-sqlalchemy,sqlalchemy,typing-extensions,yt-dlp,apscheduler,tzlocal,pytz,six,requests,charset-normalizer,waitress,kivy
 
 # (str) Presplash / icon
 # (we don't ship one, so leave the defaults)
@@ -59,11 +70,21 @@ android.ndk_api = 21
 # (bool) Use legacy build (may be needed on older p4a versions)
 # android.use_legacy_build = True
 
-# (str) Android entry point - we use our main.py
-android.entrypoint = org.downloadsx.downloadsx.MainActivity
+# (bool) Automatically accept every Android SDK licence via
+# `sdkmanager --licenses`. This is more robust than pre-seeding licence
+# hash files (Google rotates the licence text), and is required for
+# non-interactive CI builds.
+android.accept_sdk_license = True
 
-# (str) Bootstrap to use
-android.bootstrap = sdl2
+# (str) Android entry point.
+# NOTE: leave this unset so Buildozer uses the sdl2 bootstrap default
+# (org.kivy.android.PythonActivity). Pointing it at a non-existent activity
+# class breaks the Gradle build.
+# android.entrypoint = org.kivy.android.PythonActivity
+
+# (str) Bootstrap to use (p4a.bootstrap; the old android.bootstrap name is
+# deprecated in Buildozer >= 1.5)
+p4a.bootstrap = sdl2
 
 # (list) Android additional libraries
 # p4a.archives =
