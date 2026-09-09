@@ -30,10 +30,21 @@ source.exclude_patterns = .git/*,.github/*,buildozer.spec,*.zip,downloads/*,temp
 # (str) Application versioning (method 1)
 version = 0.1.0
 
-# (list) Application requirements (must be in p4a's recipes)
-# flask, flask-sqlalchemy, apscheduler, requests and waitress are pure-Python
-# and are bundled directly without needing a recipe.
-requirements = python3,flask,flask-sqlalchemy,yt-dlp,apscheduler,requests,waitress,kivy
+# (list) Architectures to build for. arm64-v8a covers all modern Android
+# devices (Google has required 64-bit since 2019); building only this arch
+# halves CI time/disk and avoids a python-for-android bug where the second
+# arch reuses the first arch's venv with a corrupted pip installation.
+android.archs = arm64-v8a
+
+# (list) Application requirements.
+# python3/flask/sqlalchemy/kivy have p4a recipes and are compiled for ARM.
+# The rest are pure-Python and are bundled directly without needing a recipe.
+# NOTE: p4a installs pip modules with --no-deps, so every transitive runtime
+# dependency must be listed explicitly: sqlalchemy (for flask-sqlalchemy),
+# typing-extensions (for sqlalchemy), tzlocal/pytz/six (for apscheduler),
+# charset-normalizer (for modern requests; p4a's kivy recipe only pulls the
+# obsolete chardet).
+requirements = python3,flask,flask-sqlalchemy,sqlalchemy,typing-extensions,yt-dlp,apscheduler,tzlocal,pytz,six,requests,charset-normalizer,waitress,kivy
 
 # (str) Presplash / icon
 # (we don't ship one, so leave the defaults)

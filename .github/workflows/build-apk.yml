@@ -126,6 +126,8 @@ jobs:
           LOG="${{ github.workspace }}/buildozer.log"
           echo "===== log size ====="
           wc -l "$LOG" 2>/dev/null || echo "(no buildozer.log found)"
+          { echo "--- df ---"; df -h / /tmp 2>/dev/null; echo "--- du ---"; du -sh "${{ github.workspace }}/.buildozer" "$HOME/.buildozer" 2>/dev/null; } > /tmp/disk.txt 2>&1 || true
+          cat /tmp/disk.txt
           python3 - "$LOG" <<'EOF'
           import re, sys
           ansi = re.compile(r"\x1b\[[0-9;]*m")
@@ -144,6 +146,12 @@ jobs:
                   chunk = numbered[j:j + 12]
                   print(f"::error::buildozer {title}:%0A{esc(chr(10).join(chunk))}")
           # NOTE: annotations display newest-first, so emit least-important first.
+          # 0) Disk usage (rules out no-space-left failures).
+          try:
+              with open("/tmp/disk.txt", errors="replace") as f:
+                  emit("disk", [ln.rstrip()[:400] for ln in f.read().splitlines() if ln.strip()])
+          except OSError:
+              pass
           # 1) Error-pattern matches (numbered, deduped, most recent last).
           pats = re.compile(r"Error|ERROR|FAILED|Failed|failed to|Exception|FATAL|Caused by|BUILD FAILED|Recipe .* failed|not found|No such|Cannot |Conflict|Unsatisfiable|returned non-zero|exit code|raise |undefined reference|ld returned")
           seen, hits = set(), []
