@@ -78,17 +78,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install --upgrade buildozer cython
 
-      - name: Accept Android SDK licenses
-        # p4a downloads its own Android SDK but needs the licences accepted
-        # before it can install platform-tools / build-tools.
+      - name: Sanitize cached Android SDK
+        # Buildozer treats ANY existing SDK dir as "SDK found" and skips
+        # installing the command-line tools, then fails when sdkmanager is
+        # missing. A failed run can therefore poison the ~/.buildozer
+        # cache with a half-installed SDK (e.g. only `licenses/`).
+        # Drop such a broken dir so buildozer does a clean SDK install.
+        # (SDK licences themselves are accepted via
+        # `android.accept_sdk_license = True` in buildozer.spec.)
         run: |
-          export ANDROIDSDK="$HOME/.buildozer/android/platform/android-sdk"
-          mkdir -p "$ANDROIDSDK/licenses"
-          # These are the well-known p4a license hashes (Apache 2.0).
-          echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > "$ANDROIDSDK/licenses/android-sdk-license"
-          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > "$ANDROIDSDK/licenses/android-sdk-preview-license"
-          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$ANDROIDSDK/licenses/android-googletv-license"
-          echo "601085b94cd77f0b54ff86406957099ebe79c4d6" > "$ANDROIDSDK/licenses/google-gdk-license"
+          SDK="$HOME/.buildozer/android/platform/android-sdk"
+          if [ -d "$SDK" ] && [ ! -d "$SDK/cmdline-tools" ] && [ ! -x "$SDK/tools/bin/sdkmanager" ]; then
+            echo "Removing incomplete cached SDK at $SDK"
+            rm -rf "$SDK"
+          else
+            echo "Cached SDK looks usable (or absent, will be installed)."
+          fi
 
       - name: Build APK with Buildozer
         env:

@@ -71,8 +71,9 @@ android.accept_sdk_license = True
 # class breaks the Gradle build.
 # android.entrypoint = org.kivy.android.PythonActivity
 
-# (str) Bootstrap to use
-android.bootstrap = sdl2
+# (str) Bootstrap to use (p4a.bootstrap; the old android.bootstrap name is
+# deprecated in Buildozer >= 1.5)
+p4a.bootstrap = sdl2
 
 # (list) Android additional libraries
 # p4a.archives =
