@@ -39,3 +39,16 @@ It:
 The first run downloads the Android SDK / NDK and builds all native
 recipes from source, so it can take 30-60 minutes. Subsequent runs are
 much faster thanks to the cache.
+
+### Android SDK setup in CI
+
+The workflow checks the runner's Android command-line tools and links them into
+Buildozer's SDK at `tools/bin/sdkmanager` before starting the build.
+`android.accept_sdk_license = True` lets Buildozer accept license prompts while
+installing SDK packages. Do not create an SDK directory containing only license
+files: Buildozer treats an existing directory as an installed SDK and then fails
+with `sdkmanager ... does not exist`.
+
+The `buildozer-sdk-v2` cache namespace avoids restoring the previous incomplete
+SDK setup. If a build fails, download the `downloadsx-build-report-<run number>`
+artifact for the full Buildozer log and diagnostics.

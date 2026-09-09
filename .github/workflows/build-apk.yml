@@ -28,6 +28,7 @@ jobs:
           python-version: "3.11"
 
       - name: Cache Buildozer / p4a build
+        # v2 avoids restoring the old licenses-only SDK directory.
         # Speeds up repeat builds by caching ~/.buildozer (downloaded
         # Android SDK / NDK / recipes / .gradle outputs). The first run
         # will still be slow because everything has to be downloaded.
@@ -36,9 +37,9 @@ jobs:
           path: |
             ~/.buildozer
             ~/Library/buildozer
-          key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec', 'requirements.txt', 'main.py') }}
+          key: ${{ runner.os }}-buildozer-sdk-v2-${{ hashFiles('buildozer.spec', 'requirements.txt', 'main.py', '.github/workflows/build-apk.yml') }}
           restore-keys: |
-            ${{ runner.os }}-buildozer-
+            ${{ runner.os }}-buildozer-sdk-v2-
 
       - name: Install Buildozer system dependencies
         # python-for-android needs these system packages on Ubuntu to
@@ -75,17 +76,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install --upgrade buildozer cython
 
-      - name: Accept Android SDK licenses
-        # p4a downloads its own Android SDK but needs the licences accepted
-        # before it can install platform-tools / build-tools.
+      - name: Prepare Android SDK tools
+        # A licenses-only SDK directory makes Buildozer skip SDK installation.
+        # Use the runner's installed command-line tools, exposed at the legacy
+        # tools/bin path expected by Buildozer 1.6. License prompts are handled
+        # by android.accept_sdk_license in buildozer.spec, not fabricated files.
         run: |
-          export ANDROIDSDK="$HOME/.buildozer/android/platform/android-sdk"
-          mkdir -p "$ANDROIDSDK/licenses"
-          # These are the well-known p4a license hashes (Apache 2.0).
-          echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > "$ANDROIDSDK/licenses/android-sdk-license"
-          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > "$ANDROIDSDK/licenses/android-sdk-preview-license"
-          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$ANDROIDSDK/licenses/android-googletv-license"
-          echo "601085b94cd77f0b54ff86406957099ebe79c4d6" > "$ANDROIDSDK/licenses/google-gdk-license"
+          set -euo pipefail
+          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
+          SDK_TOOLS="${ANDROID_HOME:?ANDROID_HOME must point to the runner SDK}/cmdline-tools/latest"
+          if [ ! -x "$SDK_TOOLS/bin/sdkmanager" ]; then
+            echo "::error::Android command-line tools missing at $SDK_TOOLS"
+            exit 1
+          fi
+          mkdir -p "$SDK_ROOT"
+          if [ ! -e "$SDK_ROOT/tools" ]; then
+            ln -sfnT "$SDK_TOOLS" "$SDK_ROOT/tools"
+          fi
+          "$SDK_ROOT/tools/bin/sdkmanager" --sdk_root="$SDK_ROOT" --version
 
       - name: Record toolchain information
         run: |

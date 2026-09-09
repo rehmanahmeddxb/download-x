@@ -53,6 +53,10 @@ android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE,READ_EXTER
 android.api = 33
 android.minapi = 21
 
+# (bool) Let Buildozer accept SDK licenses while installing real SDK packages.
+# Do not pre-create a licenses-only SDK directory: it skips SDK installation.
+android.accept_sdk_license = True
+
 # (int) Target Android SDK
 android.ndk_api = 21
 
