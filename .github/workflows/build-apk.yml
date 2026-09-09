@@ -150,7 +150,7 @@ jobs:
           runs = [i for i, ln in enumerate(lines) if ln.strip().startswith(("# Run ", "# Command failed"))]
           emit("last-commands", [f"{i+1}: {lines[i][:400]}" for i in runs[-6:]] or ["(no '# Run' lines)"])
           # 3) Error-pattern matches (numbered, deduped, most recent last).
-          pats = re.compile(r"Error|ERROR|FAILED|Failed|failed to|Exception|FATAL|Caused by|BUILD FAILED|Recipe .* failed|not found|No such|Cannot |Conflict|Unsatisfiable|license|License|returned non-zero|exit code|raise ")
+          pats = re.compile(r"Error|ERROR|FAILED|Failed|failed to|Exception|FATAL|Caused by|BUILD FAILED|Recipe .* failed|not found|No such|Cannot |Conflict|Unsatisfiable|returned non-zero|exit code|raise |undefined reference|ld returned")
           seen, hits = set(), []
           for i, ln in enumerate(lines):
               s = ln.strip()
