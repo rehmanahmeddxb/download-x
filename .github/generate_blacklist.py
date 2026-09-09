@@ -5,10 +5,9 @@ of the app bundle (see ``android.blacklist_src`` in buildozer.spec).
 Patterns are fnmatch globs matched against each file's full path
 (``*`` crosses directory boundaries).
 
-Because a custom blacklist file REPLACES the bootstrap's default list,
-this script embeds that default list verbatim (source: the pinned p4a
-commit in buildozer.spec, ``_sdl_common/build/blacklist.txt``) and then
-appends DownloadSX-specific strips:
+p4a *appends* this file to its built-in defaults
+(``BLACKLIST_PATTERNS += ...`` in the packaging step), so only
+DownloadSX-specific strips are listed:
 
 * yt-dlp extractor modules for the ~940 video sites we never touch
   (the URL validator only allows YouTube) -- ~20 MB uncompressed,
@@ -30,100 +29,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_PATH = os.path.join(REPO_ROOT, "p4a-blacklist.txt")
 
 # ---------------------------------------------------------------------------
-# Part 1: bootstrap defaults, verbatim from the pinned p4a commit.
-# Source:
-#   pythonforandroid/bootstraps/_sdl_common/build/blacklist.txt
-# at p4a.commit in buildozer.spec. If the pin moves, re-copy this section
-# from the new commit.
-# ---------------------------------------------------------------------------
-BOOTSTRAP_DEFAULTS = """# prevent user to include invalid extensions
-*.apk
-*.aab
-*.apks
-*.pxd
-
-# eggs
-*.egg-info
-
-# unit test
-unittest/*
-
-# python config
-config/makesetup
-
-# unused kivy files (platform specific)
-kivy/input/providers/wm_*
-kivy/input/providers/mactouch*
-kivy/input/providers/probesysfs*
-kivy/input/providers/mtdev*
-kivy/input/providers/hidinput*
-kivy/core/camera/camera_videocapture*
-kivy/core/spelling/*osx*
-kivy/core/video/video_pyglet*
-kivy/tools
-kivy/tests/*
-kivy/*/*.h
-kivy/*/*.pxi
-
-# unused encodings
-lib-dynload/*codec*
-encodings/cp*.pyo
-encodings/tis*
-encodings/shift*
-encodings/bz2*
-encodings/iso*
-encodings/undefined*
-encodings/johab*
-encodings/p*
-encodings/m*
-encodings/euc*
-encodings/k*
-encodings/unicode_internal*
-encodings/quo*
-encodings/gb*
-encodings/big5*
-encodings/hp*
-encodings/hz*
-
-# unused python modules
-bsddb/*
-wsgiref/*
-hotshot/*
-pydoc_data/*
-tty.pyo
-anydbm.pyo
-nturl2path.pyo
-LICENCE.txt
-macurl2path.pyo
-dummy_threading.pyo
-audiodev.pyo
-antigravity.pyo
-dumbdbm.pyo
-sndhdr.pyo
-__phello__.foo.pyo
-sunaudio.pyo
-os2emxpath.pyo
-multiprocessing/dummy*
-
-# unused binaries python modules
-lib-dynload/termios.so
-lib-dynload/_lsprof.so
-lib-dynload/*audioop.so
-lib-dynload/_hotshot.so
-lib-dynload/_heapq.so
-lib-dynload/_json.so
-lib-dynload/grp.so
-lib-dynload/resource.so
-lib-dynload/pyexpat.so
-lib-dynload/_ctypes_test.so
-lib-dynload/_testcapi.so
-
-# odd files
-plat-linux3/regen
-"""
-
-# ---------------------------------------------------------------------------
-# Part 2: static DownloadSX additions.
+# Static DownloadSX additions (part 1 of the generated file).
 # ---------------------------------------------------------------------------
 STATIC_ADDITIONS = """# --- DownloadSX additions (hand-maintained) ---
 
@@ -211,14 +117,10 @@ def generate():
     )
     return (
         "# p4a APK file blacklist (android.blacklist_src in buildozer.spec).\n"
-        "#\n"
-        "# A custom file REPLACES the bootstrap default list, so part 1\n"
-        "# below is that default list, copied verbatim. Parts 2-3 are ours.\n\n"
-        "# ================= part 1: bootstrap defaults =================\n"
-        + BOOTSTRAP_DEFAULTS
-        + "\n# ================= part 2: static additions =================\n"
+        "# p4a appends this file to its built-in defaults.\n\n"
+        "# ================= part 1: static additions =================\n"
         + STATIC_ADDITIONS
-        + "\n# ================= part 3: generated yt-dlp strip =================\n"
+        + "\n# ================= part 2: generated yt-dlp strip =================\n"
         + header
         + "".join(p + "\n" for p in patterns)
     )

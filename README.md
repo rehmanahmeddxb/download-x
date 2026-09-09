@@ -53,7 +53,9 @@ waitress, requests, Kivy). Current builds are much smaller thanks to:
 
 What remains is mostly unavoidable for this feature set: embedded CPython
 + OpenSSL/SQLite, the YouTube-relevant part of yt-dlp, and SQLAlchemy.
-Expect roughly **20 MB** for the debug APK.
+Main's un-stripped webview APK measured 16.8 MB; with the blacklist
+removing another ~32 MB uncompressed, expect roughly **~10 MB** for the
+debug APK (the exact number lands in `apk-size.txt` on every CI build).
 
 Note: `certifi`'s ~280 KB CA bundle is deliberately *in* the closure —
 Android has no CA path Python's `ssl` module can use, so without it every

@@ -81,10 +81,10 @@ android.numeric_version = 2
 requirements = python3,flask==3.1.3,flask-sqlalchemy==3.1.1,sqlalchemy==2.0.52,typing-extensions==4.16.0,yt-dlp==2026.8.19,certifi==2026.7.22
 
 # (str) p4a file blacklist: fnmatch patterns for files to LEAVE OUT of the
-# APK (see above). A custom file REPLACES the bootstrap defaults, so
-# p4a-blacklist.txt embeds those defaults verbatim plus our strips. It is
-# partly generated -- see .github/generate_blacklist.py -- and validated
-# without building an APK by .github/strip_check.py (runs in CI).
+# APK (see above). p4a appends this file to its built-in defaults, so
+# p4a-blacklist.txt only lists OUR strips. It is partly generated -- see
+# .github/generate_blacklist.py -- and validated without building an APK
+# by .github/strip_check.py (runs in CI).
 android.blacklist_src = p4a-blacklist.txt
 
 # (str) Presplash / icon
