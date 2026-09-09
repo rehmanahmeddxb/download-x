@@ -13,7 +13,6 @@ appends DownloadSX-specific strips:
 * yt-dlp extractor modules for the ~940 video sites we never touch
   (the URL validator only allows YouTube) -- ~20 MB uncompressed,
 * SQLAlchemy test helpers + non-SQLite dialects,
-* Kivy dev modules, chardet (unused; requests works without it),
 * ``__pycache__`` (rebuilt on device) and ``.pyi`` stubs.
 
 The yt-dlp section is generated from the INSTALLED yt-dlp, which must
@@ -134,27 +133,6 @@ sqlalchemy/dialects/mysql/*
 sqlalchemy/dialects/postgresql/*
 sqlalchemy/dialects/oracle/*
 sqlalchemy/dialects/mssql/*
-
-# Kivy developer modules (inspector/recorder/...) -- never activated.
-# NOTE: kivy/__init__.py unconditionally does
-# `from kivy.modules import Modules`, so the package __init__ must stay;
-# list the dev modules explicitly instead of blacklisting the directory.
-kivy/modules/_webdebugger.py
-kivy/modules/console.py
-kivy/modules/cursor.py
-kivy/modules/inspector.py
-kivy/modules/joycursor.py
-kivy/modules/keybinding.py
-kivy/modules/monitor.py
-kivy/modules/recorder.py
-kivy/modules/screen.py
-kivy/modules/showborder.py
-kivy/modules/touchring.py
-kivy/modules/webdebugger.py
-
-# chardet is pulled in by the kivy recipe but nothing uses it
-# (requests falls back cleanly when it is absent).
-chardet/*
 
 # Bytecode caches are rebuilt on first import; stubs are never imported.
 __pycache__/*

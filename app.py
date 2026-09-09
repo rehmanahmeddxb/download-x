@@ -108,22 +108,17 @@ def create_app():
 
 
 def run_server(flask_app):
-    """Serve `flask_app` blocking the current thread.
+    """Serve `flask_app`, blocking the current thread.
 
-    Prefers waitress (threaded, production-grade, pure Python) and falls
-    back to Flask's built-in server if waitress is unavailable.
+    The Flask dev server (threaded) is all a loopback server needs, so no
+    production WSGI container is bundled (keeps the APK smaller).
     """
     host = flask_app.config.get("HOST", Config.HOST)
     port = int(flask_app.config.get("PORT", Config.PORT))
-    try:
-        from waitress import serve
-
-        serve(flask_app, host=host, port=port, threads=8)
-    except ImportError:
-        # threaded=True lets the browser poll /api/tasks while downloads run
-        # in their own background threads.
-        flask_app.run(host=host, port=port, debug=False, threaded=True,
-                      use_reloader=False)
+    # threaded=True lets the browser poll /api/tasks while downloads run
+    # in their own background threads.
+    flask_app.run(host=host, port=port, debug=False, threaded=True,
+                  use_reloader=False)
 
 
 if __name__ == "__main__":

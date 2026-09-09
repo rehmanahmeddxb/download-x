@@ -223,69 +223,115 @@ def task_file(task_id):
     if not os.path.isfile(path):
         get_logger().warning(f"task file missing on disk: {path}")
         return jsonify({"error": "File no longer exists on the server."}), 404
+    # Never serve files from outside the configured download folder.
+    allowed = os.path.normpath(get_settings().download_folder or "")
+    if allowed and not os.path.normpath(path).startswith(allowed + os.sep):
+        return jsonify({"error": "Forbidden."}), 403
     return send_file(path, as_attachment=True, download_name=os.path.basename(path))
 
 
 # ---------------------------------------------------------- direct stream
+def _error_page(message: str) -> str:
+    # This endpoint is navigated to directly (not fetched via XHR), so
+    # failures must render as a readable page, not bare JSON.
+    safe = message.replace("&", "&amp;").replace("<", "&lt;")
+    return (
+        "<!doctype html><title>Download</title>"
+        "<body style='font-family:sans-serif;padding:2em'>"
+        f"<h3>Download unavailable</h3><p>{safe}</p>"
+        "<p><a href='/downloads'>&larr; Back</a></p></body>"
+    )
+
+
 @api_bp.route("/direct/download")
 def direct_download():
     url = (request.args.get("url") or "").strip()
     format_id = request.args.get("format_id") or "best"
     title = request.args.get("title") or "video"
     if not is_valid_youtube_url(url):
-        return jsonify({"error": "Invalid YouTube link."}), 400
+        return _error_page("Invalid YouTube link."), 400
     try:
         resolved = downloader.resolve_direct(url, format_id)
     except RuntimeError as ex:
         get_logger().warning(f"direct resolve failed for {url}: {ex}")
-        return jsonify({"error": str(ex)}), 502
+        return _error_page(f"Could not resolve this quality: {ex}"), 502
 
     if resolved.get("mode") == "mux":
         # Separate video+audio streams would need a live ffmpeg mux, which
         # the APK doesn't ship. Tell the user to pick a progressive quality.
-        return (
-            jsonify(
-                {
-                    "error": (
-                        "That quality is split into separate video+audio streams "
-                        "and can't be streamed directly. Pick a progressive "
-                        "quality (marked with the resume icon) or add it to the "
-                        "queue instead."
-                    )
-                }
-            ),
-            400,
-        )
+        return _error_page(
+            "That quality is split into separate video+audio streams and "
+            "can't be streamed directly. Pick a progressive quality (marked "
+            "with the resume icon) or add it to the queue instead."
+        ), 400
 
-    try:
-        import requests
-    except ImportError:
-        return jsonify({"error": "Direct streaming is unavailable in this build."}), 501
+    return _proxy_stream(
+        resolved["url"],
+        resolved.get("headers") or {},
+        title,
+        resolved.get("ext") or "mp4",
+    )
 
-    upstream_headers = dict(resolved.get("headers") or {})
+
+def _proxy_stream(url, headers, title, ext):
+    """Stream upstream bytes to the browser with stdlib urllib (no extra
+    dependency) and Range passthrough for pause/resume."""
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    safe_name = sanitize_filename(title) or "video"
+    filename = (
+        safe_name
+        if safe_name.lower().endswith(f".{ext}")
+        else f"{safe_name}.{ext}"
+    )
+    upstream_headers = dict(headers or {})
     # Pass through Range so the browser can pause/resume the transfer.
     if request.headers.get("Range"):
         upstream_headers["Range"] = request.headers["Range"]
     try:
-        upstream = requests.get(resolved["url"], headers=upstream_headers,
-                                stream=True, timeout=30)
+        upstream = urllib.request.urlopen(
+            urllib.request.Request(url, headers=upstream_headers), timeout=30
+        )
+    except urllib.error.HTTPError as ex:
+        return _error_page(
+            f"Upstream server refused the stream (HTTP {ex.code}). "
+            "Try another quality."
+        ), 502
     except Exception as ex:
         get_logger().warning(f"direct upstream failed: {ex}")
-        return jsonify({"error": "Could not reach the media server."}), 502
+        return _error_page(f"Could not reach the media server: {ex}"), 502
 
-    filename = f"{sanitize_filename(title)}.{resolved.get('ext') or 'mp4'}"
-    headers = {
-        "Content-Disposition": f'attachment; filename="{filename}"',
+    resp_headers = {
+        "Content-Disposition": (
+            "attachment; filename*=UTF-8''" + urllib.parse.quote(filename)
+        ),
+        "Accept-Ranges": "bytes",
     }
-    for key in ("Content-Type", "Content-Length", "Content-Range", "Accept-Ranges"):
-        if upstream.headers.get(key):
-            headers[key] = upstream.headers[key]
+    for key in ("Content-Type", "Content-Length", "Content-Range"):
+        value = upstream.headers.get(key)
+        if value:
+            resp_headers[key] = value
+    resp_headers.setdefault("Content-Type", "application/octet-stream")
+
+    def _generate():
+        try:
+            while True:
+                chunk = upstream.read(65536)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            try:
+                upstream.close()
+            except Exception:
+                pass
 
     return Response(
-        stream_with_context(upstream.iter_content(chunk_size=65536)),
-        status=upstream.status_code,
-        headers=headers,
-        direct_passthrough=True,
+        stream_with_context(_generate()),
+        status=getattr(upstream, "status", 200),
+        headers=resp_headers,
     )
 
 

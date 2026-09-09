@@ -33,10 +33,10 @@ def main():
     os.chdir(repo_root)
 
     # Use a throwaway database so the test never touches real data.
-    os.environ["YTDX_DATABASE_URI"] = "sqlite:////tmp/smoke-test.db"
-    os.environ["YTDX_DOWNLOAD_FOLDER"] = "/tmp/smoke-downloads"
-    os.environ["YTDX_TEMP_FOLDER"] = "/tmp/smoke-temp"
-    os.environ["YTDX_LOG_DIR"] = "/tmp/smoke-logs"
+    os.environ["YTDLX_DATABASE_URI"] = "sqlite:////tmp/smoke-test.db"
+    os.environ["YTDLX_DOWNLOAD_FOLDER"] = "/tmp/smoke-downloads"
+    os.environ["YTDLX_TEMP_FOLDER"] = "/tmp/smoke-temp"
+    os.environ["YTDLX_LOG_DIR"] = "/tmp/smoke-logs"
     for stale in ("/tmp/smoke-test.db",):
         if os.path.exists(stale):
             os.remove(stale)

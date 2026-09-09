@@ -44,12 +44,6 @@ jobs:
         # would ship as "APK installs but instantly closes / dead UI".
         run: python .github/smoke_test.py
 
-      - name: Install APK-only launcher deps (for strip validation)
-        # The desktop app doesn't need Kivy, but the APK does -- and the
-        # file blacklist strips parts of it, so validate against the real
-        # packages. (filetype is imported unconditionally by kivy.core.image.)
-        run: pip install kivy filetype
-
       - name: Check APK file blacklist is up to date
         # The yt-dlp section of p4a-blacklist.txt is generated from the
         # pinned yt-dlp; fail if it drifted instead of shipping stale patterns.
@@ -219,60 +213,27 @@ jobs:
           echo "APK_PATH=$APK" >> "$GITHUB_ENV"
           echo "Built APK: $APK ($(du -h "$APK" | cut -f1))"
 
-      - name: Report APK size and contents
-        # Answers "why is the APK so big?" with data: total size, per-arch
-        # native libs, and the largest bundled entries. Non-fatal by design.
+      - name: Report APK size breakdown
+        # Shows where the megabytes go so future bloat is easy to spot.
         run: |
-          set +e
-          mkdir -p ci-artifacts
-          python3 - "$APK_PATH" > ci-artifacts/apk-contents.txt <<'EOF'
-          import os, sys, zipfile
-          apk = sys.argv[1]
-          size_mb = os.path.getsize(apk) / 1024**2
-          print(f"APK: {apk}  ({size_mb:.1f} MB on disk)")
-          with zipfile.ZipFile(apk) as zf:
-              infos = zf.infolist()
-              total_c = sum(i.compress_size for i in infos)
-              total_u = sum(i.file_size for i in infos)
-              print(f"entries: {len(infos)}, "
-                    f"compressed: {total_c/1024**2:.1f} MB, "
-                    f"uncompressed: {total_u/1024**2:.1f} MB")
-              archs = {}
-              for i in infos:
-                  if i.filename.startswith("lib/") and i.filename.endswith(".so"):
-                      parts = i.filename.split("/")
-                      if len(parts) >= 3:
-                          archs[parts[1]] = archs.get(parts[1], 0) + i.compress_size
-              if archs:
-                  print("native libs per ABI (compressed):")
-                  for abi, n in sorted(archs.items()):
-                      print(f"  {abi}: {n/1024**2:.1f} MB")
-              else:
-                  print("WARNING: no lib/<abi>/*.so entries found!")
-              for needle, label in (("database.db", "bundled desktop database"),
-                                    ("__pycache__", "pycache")):
-                  hits = [i.filename for i in infos if needle in i.filename]
-                  if hits:
-                      print(f"WARNING: APK contains {label}: {hits[:5]}")
-              print("largest 30 entries (compressed):")
-              for i in sorted(infos, key=lambda x: -x.compress_size)[:30]:
-                  print(f"  {i.compress_size/1024:9.0f} KB  {i.filename}")
-          EOF
-          cat ci-artifacts/apk-contents.txt
+          APK="${APK_PATH:?APK_PATH was not set by the verify step}"
           {
             echo "## APK size report"
-            echo '```'
-            cat ci-artifacts/apk-contents.txt
-            echo '```'
+            echo "File: $APK ($(du -h "$APK" | cut -f1))"
             echo ""
-            echo "### Manifest (aapt, best effort)"
-            AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt 2>/dev/null | head -n 1)
-            if [ -n "$AAPT" ]; then
-              "$AAPT" dump badging "$APK_PATH" 2>/dev/null | head -n 20 || echo "(aapt failed)"
-            else
-              echo "(aapt not found)"
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+            echo "### Largest entries (compressed size)"
+            unzip -lv "$APK" | sort -k5 -n -r | head -30
+            echo ""
+            echo "### Totals by top-level folder"
+            unzip -l "$APK" | awk '{print $4}' | cut -d/ -f1 | sort | uniq -c | sort -rn
+            echo ""
+            echo "### Red flags (should all be empty)"
+            for needle in database.db __pycache__ kivy/ chardet/; do
+              hits=$(unzip -l "$APK" | grep -c "$needle" || true)
+              echo "$needle: $hits entries"
+            done
+          } | tee ci-artifacts/apk-size.txt
+          cat ci-artifacts/apk-size.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Collect failure diagnostics
         if: always()

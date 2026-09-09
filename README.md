@@ -5,74 +5,25 @@ Flask + yt-dlp, packaged as an Android APK via
 [Buildozer](https://github.com/buildozer/buildozer) (python-for-android)
 and built automatically by GitHub Actions.
 
-The Flask app inside `app.py` is identical to the upstream
-**YT Downloader X Pro** project. The repository also ships:
+The APK uses the python-for-android **`webview` bootstrap**: Android shows
+a native WebView pointed at the bundled Flask server
+(`http://127.0.0.1:5000`, with a loading screen until the server answers).
+No Kivy / SDL stack — the UI is the same Flask templates + JS you see on
+desktop.
 
 | File / dir                      | Purpose                                                                 |
 | ------------------------------- | ----------------------------------------------------------------------- |
-| `main.py`                       | Android entry point. Starts the web server (waitress) in a background thread and shows a Kivy status screen (server URL, "Open in Browser", log viewer). Every startup failure is written to `logs/crash.log` and shown on screen instead of closing silently. |
-| `buildozer.spec`                | python-for-android recipe (app id, permissions, requirements, SDK levels). |
-| `.github/workflows/build-apk.yml` | CI workflow: runs the desktop smoke test, then `buildozer android debug` and uploads the resulting `.apk` as a workflow artifact. |
+| `main.py`                       | Android entry point. Runs the Flask server (with crash logging + auto-restart) that the WebView bootstrap displays. On desktop it also opens your browser — handy for debugging the exact code path the APK uses. |
+| `config.py`                     | Central config. On Android the DB/temp/logs live in private storage while finished downloads go to the app-specific folder on shared storage (visible in file managers, no permission needed); on desktop everything stays next to the source. |
+| `routes/api.py`                 | JSON API + file serving the UI calls (stats, fetch, queue, tasks, direct streaming, settings, history). |
+| `buildozer.spec`                | python-for-android recipe (app id, permissions, requirements, SDK levels, ABI, file blacklist). |
+| `requirements.txt`              | Pinned copy of the APK's Python closure (also what desktop dev installs). |
+| `.github/workflows/build-apk.yml` | CI workflow: desktop smoke test + strip validation, then `buildozer android debug`, uploading the `.apk` as a workflow artifact. |
 | `.github/smoke_test.py`         | Desktop smoke test: boots the app, verifies every `/api/*` path used by the frontend exists, and checks the API contract. Run with `python .github/smoke_test.py`. |
+| `.github/strip_check.py`        | Simulates the APK packer's file strip and re-runs the whole smoke suite against the stripped tree. |
+| `.github/generate_blacklist.py` | Regenerates the yt-dlp section of `p4a-blacklist.txt` from the pinned yt-dlp (`--check` fails if it drifted). |
+| `p4a-blacklist.txt`             | File blacklist: unused yt-dlp extractors, test helpers and bytecode caches never packaged into the APK. |
 | `.gitignore`                    | Excludes Buildozer build output and runtime data files.                |
-
-## Using the app on Android
-
-1. Install the `downloadsx-apk-*` artifact from the latest successful
-   **Build Android APK** workflow run (or build locally, below).
-2. Open **YT Downloader X Pro**. The status screen shows the server URL
-   (normally `http://127.0.0.1:5000`).
-3. Tap **Open App in Browser** — the full download manager UI opens in
-   your browser. Finished downloads land in the app's folder on shared
-   storage (`Android/data/org.downloadsx.downloadsx/files/...`), visible
-   in any file manager.
-
-## Why is the APK tens of megabytes?
-
-Short version: it ships an entire Python runtime plus the download engine.
-
-* **Python 3.14 + stdlib + native libraries** (OpenSSL, SQLite, SDL2) —
-  roughly half the APK. Every Python-for-android app pays this floor.
-* **Kivy + SDL2 bootstrap** — the launcher/status screen.
-* **yt-dlp** — pure Python, but ~1000 video-site extractors; the biggest
-  single Python payload.
-* **Flask / SQLAlchemy / waitress / requests** and the bundled web UI.
-
-Kept small on purpose:
-
-* **`arm64-v8a` only** (every phone made since ~2016; a second 32-bit ABI
-  would nearly double the size),
-* **no database shipped** (a fresh one is created in private storage on
-  first launch),
-* **no unused dependencies**, and
-* **`p4a-blacklist.txt`** strips dead weight out of the Python bundle:
-  the ~930 non-YouTube yt-dlp extractor modules (~20 MB), SQLAlchemy test
-  helpers and non-SQLite dialects, Kivy dev modules, chardet, bytecode
-  caches and type stubs.
-
-Each CI run publishes an **APK size report** (step summary +
-`apk-contents.txt` in the build report artifact) showing exactly what
-takes the space.
-
-Two things to know when touching dependencies:
-
-1. Every pure-Python runtime dependency must be listed in
-   `buildozer.spec` **explicitly** — p4a's automatic resolution silently
-   skips packages without Android wheels (e.g. SQLAlchemy), and a missing
-   module crashes the app on launch with no error.
-2. The yt-dlp section of `p4a-blacklist.txt` is generated. After bumping
-   the yt-dlp pin, regenerate it and re-validate (CI enforces both):
-
-   ```bash
-   pip install -r requirements.txt
-   python .github/generate_blacklist.py
-   python .github/strip_check.py   # needs: pip install kivy filetype
-   ```
-
-Known packaging limitations: formats that need `ffmpeg` muxing or
-AES decryption via `pycryptodomex` can't be direct-streamed in the APK
-(neither ships a recipe) — add those to the queue instead, where yt-dlp
-reports a clear per-task error.
 
 ## Build the APK locally
 
@@ -83,21 +34,81 @@ buildozer android debug          # output -> bin/*.apk
 buildozer android release        # needs a signing keystore
 ```
 
+## APK size: what's inside, and how it stays small
+
+Old builds were ~51 MB because they shipped the SDL2/Kivy engine (~20 MB)
+just to show a static label, plus unused Python packages (APScheduler,
+waitress, requests, Kivy). Current builds are much smaller thanks to:
+
+* `webview` bootstrap instead of SDL2/Kivy,
+* a minimal pinned closure — just flask, flask-sqlalchemy, sqlalchemy,
+  typing-extensions, yt-dlp, mutagen and certifi
+  (only packages the code actually imports; see `requirements.txt`),
+* a file blacklist (`p4a-blacklist.txt`) that drops the ~940 yt-dlp
+  extractors for non-YouTube sites plus test helpers and bytecode caches
+  (~33 MB uncompressed, validated by `.github/strip_check.py`),
+* a single 64-bit ABI (`android.archs = arm64-v8a`),
+* never packaging the desktop `database.db` (the app creates a fresh one
+  in its private storage on first launch).
+
+What remains is mostly unavoidable for this feature set: embedded CPython
++ OpenSSL/SQLite, the YouTube-relevant part of yt-dlp, and SQLAlchemy.
+Expect roughly **20 MB** for the debug APK.
+
+Need 32-bit devices? Add the ABI (roughly doubles native size):
+
+```ini
+android.archs = arm64-v8a,armeabi-v7a
+```
+
+Every CI build writes a size breakdown to the
+`downloadsx-build-report-<run number>` artifact (`apk-size.txt`), so new
+bloat is easy to spot.
+
+### Permissions
+
+The app only requests `INTERNET` and `ACCESS_NETWORK_STATE`. The database
+and logs live in private storage, while finished downloads go to the
+app-specific folder on shared storage
+(`Android/data/org.downloadsx.downloadsx/files/ytdlx/downloads`), which
+any file manager can see — still with no storage permission (and no scary
+"All files access").
+
+## If the app closes right after opening
+
+1. Uninstall the old 0.1.x APK first if the new one refuses to install
+   (version code changed from 1 to 2, so upgrades should work — but a
+   clean install rules out stale-data issues).
+2. Grab the crash log without root:
+   ```bash
+   adb logcat | grep -i "ytdlx\|python"
+   adb shell run-as org.downloadsx.downloadsx cat files/ytdlx/logs/crash.log
+   ```
+3. `main.py` logs every uncaught exception (including in background
+   threads) to `crash.log` and auto-restarts the Flask server with
+   backoff, so a single failed request/download can never kill the app.
+
 ## CI
 
 `.github/workflows/build-apk.yml` runs on every push and PR to `main`.
 It:
 
-1. Installs system + Python build dependencies on `ubuntu-latest`.
-2. Caches `~/.buildozer` between runs.
-3. Runs `buildozer -v android debug`.
-4. Uploads the resulting `bin/*.apk` as a downloadable artifact named
-   **`downloadsx-apk`**.
-5. If the push is a `v*` tag, it also attaches the APK to a GitHub Release.
+1. Runs the desktop smoke test plus the blacklist freshness and strip
+   validation (`smoke-test` job, fails fast before the slow build).
+2. Installs system + Python build dependencies on `ubuntu-latest`.
+3. Caches `~/.buildozer` between runs.
+4. Runs `buildozer -v android debug`.
+5. Uploads the resulting `bin/*.apk` as a downloadable artifact named
+   **`downloadsx-apk-<run number>`**.
+6. Writes an APK size breakdown (`apk-size.txt`, including red-flag
+   checks for `database.db`/`__pycache__`/kivy leftovers) into the
+   `downloadsx-build-report-<run number>` artifact.
+7. If the push is a `v*` tag, it also attaches the APK to a GitHub Release.
 
 The first run downloads the Android SDK / NDK and builds all native
 recipes from source, so it can take 30-60 minutes. Subsequent runs are
-much faster thanks to the cache.
+much faster thanks to the cache. (Switching bootstrap/ABI, like the
+v0.2.0 slim-down, forces one slow rebuild.)
 
 ### Android SDK setup in CI
 
@@ -133,42 +144,3 @@ export PIP_CONSTRAINT="$PWD/.github/build-constraints.txt"
 python -m pip install --upgrade pip buildozer cython
 buildozer android debug
 ```
-
-## Troubleshooting
-
-### The app opens and immediately closes, with no error
-
-Android kills Python-for-android apps silently when the Python code
-crashes during startup, so "flash and close" always means *an exception
-happened before the UI came up*. Since v0.2.0 the launcher catches that:
-
-1. Instead of closing, the app now shows a **"Server failed to start"**
-   screen with the error text. Tap **View Logs** for the full trace.
-2. The same report is appended to `logs/crash.log` in the app's private
-   storage (`/data/user/0/org.downloadsx.downloadsx/files/downloadsx/logs/`
-   — readable via `adb`, no root needed with `adb run-as` on debug builds).
-3. For the deepest detail (including native crashes), capture logcat
-   while reproducing:
-
-   ```bash
-   adb logcat -c
-   adb logcat | grep -iE "python|downloadsx|FATAL"
-   # now launch the app on the phone
-   ```
-
-If you report a crash, include the on-screen error (screenshot) and/or the
-`crash.log` contents — that pinpoints the cause immediately.
-
-### The UI loads but buttons do nothing / stats stay empty
-
-That means the browser can't reach the in-app server. Check the status
-screen shows **"Server is running"** and that the URL matches the one in
-your browser tab (`http://127.0.0.1:5000` by default). Old installs that
-shipped the stub API (v0.1.0, `/health`-only) show a permanently empty UI —
-update to the latest APK.
-
-### "Cannot use folder ..." when saving settings
-
-On Android 10+, apps can only write to their own folders without special
-permissions. Leave the download folder at its default (app-specific
-external storage), which always works and is visible in file managers.

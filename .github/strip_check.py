@@ -16,6 +16,7 @@ Run locally with:  ``python .github/strip_check.py``
 """
 import fnmatch
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +24,18 @@ import sys
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BLACKLIST = os.path.join(REPO_ROOT, "p4a-blacklist.txt")
 STRIPPED = "/tmp/strip-sp"
+STRIPPED_SCOPE = "/tmp/strip-scope"
+
+# Top-level site-packages entries that actually ship in the APK:
+# requirements.txt plus the flask recipe's python_depends
+# (jinja2/werkzeug/markupsafe/itsdangerous/click/blinker). Everything else
+# in a dev venv (pip, setuptools, greenlet, ...) is ignored so the report
+# and the probes mirror the APK bundle instead of the workstation.
+APK_TOP_LEVELS = {
+    "flask", "flask_sqlalchemy", "sqlalchemy", "typing_extensions.py",
+    "yt_dlp", "mutagen", "certifi",
+    "jinja2", "werkzeug", "markupsafe", "itsdangerous", "click", "blinker",
+}
 
 # Files that MUST survive the strip (relative to site-packages).
 MUST_KEEP = [
@@ -52,24 +65,9 @@ MUST_KEEP = [
     "yt_dlp/networking/__init__.py",
     "yt_dlp/downloader/__init__.py",
     "mutagen/__init__.py",
-    # HTTP + server
-    "requests/__init__.py",
-    "urllib3/__init__.py",
-    "idna/__init__.py",
-    "charset_normalizer/__init__.py",
+    # TLS CA bundle (yt-dlp loads certifi.where() when present)
     "certifi/__init__.py",
-    "waitress/__init__.py",
-    # Launcher UI
-    "kivy/__init__.py",
-    "kivy/app.py",
-    "kivy/uix/label.py",
-    "kivy/uix/button.py",
-    "kivy/uix/boxlayout.py",
-    "kivy/uix/scrollview.py",
-    "kivy/uix/popup.py",
-    "kivy/clock.py",
-    "kivy/modules/__init__.py",  # `from kivy.modules import Modules` in kivy/__init__
-    "filetype/__init__.py",  # imported unconditionally by kivy.core.image
+    "certifi/cacert.pem",
 ]
 
 # Import probes executed with ONLY the stripped tree visible (plus stdlib).
@@ -83,12 +81,7 @@ IMPORT_PROBES = [
     "typing_extensions",
     "yt_dlp",
     "mutagen",
-    "requests",
-    "urllib3",
-    "waitress",
-    "kivy",
-    "kivy.app",
-    "kivy.uix.label",
+    "certifi",
 ]
 
 
@@ -127,17 +120,14 @@ def main():
     patterns = load_patterns()
     print(f"blacklist patterns: {len(patterns)}")
 
-    # Pre-check: the validation needs the full closure installed
-    # (requirements.txt plus kivy, which desktop runs don't need but the
-    # APK ships -- and the blacklist strips).
+    # Pre-check: the validation needs the full closure installed.
     expected = ["flask", "flask_sqlalchemy", "sqlalchemy", "yt_dlp",
-                "mutagen", "requests", "waitress", "kivy"]
+                "mutagen", "certifi"]
     missing_pkgs = [p for p in expected
                     if not os.path.exists(os.path.join(src, p))]
     if missing_pkgs:
         print(f"FAIL: install the full closure first, missing: {missing_pkgs}\n"
-              f"  pip install -r requirements.txt\n"
-              f"  pip install kivy filetype   # APK-only launcher UI")
+              f"  pip install -r requirements.txt")
         return 1
 
     # 1+2. copy (hardlinks) + strip
@@ -154,18 +144,52 @@ def main():
                     ignore_dangling_symlinks=True)
     removed_files, removed_bytes = 0, 0
     removed_by_topdir: dict[str, int] = {}
-    for root, _dirs, files in os.walk(STRIPPED):
-        for name in files:
-            full = os.path.join(root, name)
+    for top in sorted(APK_TOP_LEVELS):
+        top_path = os.path.join(STRIPPED, top)
+        if os.path.isfile(top_path):
+            candidates = [top_path]
+        elif os.path.isdir(top_path):
+            candidates = [
+                os.path.join(root, name)
+                for root, _dirs, files in os.walk(top_path)
+                for name in files
+            ]
+        else:
+            continue
+        for full in candidates:
             if is_blacklisted(patterns, full):
                 removed_bytes += os.path.getsize(full)
-                top = os.path.relpath(full, STRIPPED).split(os.sep)[0]
                 removed_by_topdir[top] = removed_by_topdir.get(top, 0) + 1
                 removed_files += 1
                 os.remove(full)
-    print(f"stripped {removed_files} files ({removed_bytes / 1024 / 1024:.1f} MB):")
-    for top, count in sorted(removed_by_topdir.items(), key=lambda kv: -kv[1])[:12]:
+    print(f"stripped {removed_files} APK files "
+          f"({removed_bytes / 1024 / 1024:.1f} MB uncompressed):")
+    for top, count in sorted(removed_by_topdir.items(), key=lambda kv: -kv[1]):
         print(f"  {count:5d}  {top}")
+
+    # Probe tree exposing ONLY the APK closure (symlinked, instant).
+    if os.path.exists(STRIPPED_SCOPE):
+        shutil.rmtree(STRIPPED_SCOPE)
+    os.makedirs(STRIPPED_SCOPE)
+    for top in sorted(APK_TOP_LEVELS):
+        src_top = os.path.join(STRIPPED, top)
+        if os.path.exists(src_top):
+            os.symlink(src_top, os.path.join(STRIPPED_SCOPE, top))
+    # ...plus their dist-info (pip installs wheels with metadata intact and
+    # nothing in the chain strips it; flask's own test client needs
+    # importlib.metadata.version("werkzeug")).
+    dist_names = {"flask", "flask-sqlalchemy", "sqlalchemy",
+                  "typing-extensions", "yt-dlp", "mutagen", "certifi",
+                  "jinja2", "werkzeug", "markupsafe", "itsdangerous",
+                  "click", "blinker"}
+    for entry in os.listdir(STRIPPED):
+        if not entry.endswith(".dist-info"):
+            continue
+        canon = re.sub(r"[-_.]+", "-", entry[:-len(".dist-info")]).lower()
+        canon = re.sub(r"-\d.*$", "", canon)  # drop -<version>
+        if canon in dist_names:
+            os.symlink(os.path.join(STRIPPED, entry),
+                       os.path.join(STRIPPED_SCOPE, entry))
 
     def check(name, condition, detail=""):
         print(("PASS " if condition else "FAIL ") + name
@@ -209,10 +233,8 @@ def main():
           not files_left(os.path.join("sqlalchemy", "dialects", "mysql")))
     check("sqlalchemy sqlite dialect kept",
           bool(files_left(os.path.join("sqlalchemy", "dialects", "sqlite"))))
-    check("chardet stripped", not files_left("chardet"))
-    kivy_modules_left = sorted(files_left(os.path.join("kivy", "modules")))
-    check("kivy dev modules stripped, package init kept",
-          kivy_modules_left == ["__init__.py"], str(kivy_modules_left))
+    check("certifi CA bundle kept",
+          os.path.exists(os.path.join(STRIPPED, "certifi", "cacert.pem")))
 
     if failures:
         print(f"\n{len(failures)} failure(s) before import probes -- aborting")
@@ -221,7 +243,7 @@ def main():
     # 4. import probes against the stripped tree only
     probe_code = (
         "import sys; "
-        f"sys.path = {[STRIPPED]} + [p for p in sys.path "
+        f"sys.path = {[STRIPPED_SCOPE]} + [p for p in sys.path "
         "if 'site-packages' not in p and 'dist-packages' not in p]; "
         "import importlib; "
         f"[importlib.import_module(m.split(':')[0]) for m in {IMPORT_PROBES!r}]; "
@@ -237,7 +259,7 @@ def main():
     # 5. functional probes: sqlite engine, youtube extractor resolution
     func_code = (
         "import sys; "
-        f"sys.path = {[STRIPPED]} + [p for p in sys.path "
+        f"sys.path = {[STRIPPED_SCOPE]} + [p for p in sys.path "
         "if 'site-packages' not in p and 'dist-packages' not in p]; "
         "from sqlalchemy import create_engine, text; "
         "e = create_engine('sqlite://'); "
@@ -257,8 +279,10 @@ def main():
 
     # 6. the whole smoke suite with the stripped tree shadowing site-packages
     env = dict(os.environ)
-    env["PYTHONPATH"] = STRIPPED + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-    proc = subprocess.run([sys.executable, ".github/smoke_test.py"],
+    env["PYTHONPATH"] = STRIPPED_SCOPE + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    # -S skips the real site-packages: only the stdlib + the scope tree
+    # (PYTHONPATH) are importable, exactly like the APK bundle.
+    proc = subprocess.run([sys.executable, "-S", ".github/smoke_test.py"],
                           capture_output=True, text=True, cwd=REPO_ROOT, env=env)
     print("----- smoke_test.py under stripped tree -----")
     print(proc.stdout[-3000:])
