@@ -33,7 +33,7 @@ STRIPPED_SCOPE = "/tmp/strip-scope"
 # and the probes mirror the APK bundle instead of the workstation.
 APK_TOP_LEVELS = {
     "flask", "flask_sqlalchemy", "sqlalchemy", "typing_extensions.py",
-    "yt_dlp", "mutagen", "certifi",
+    "yt_dlp", "certifi",
     "jinja2", "werkzeug", "markupsafe", "itsdangerous", "click", "blinker",
 }
 
@@ -64,7 +64,6 @@ MUST_KEEP = [
     "yt_dlp/utils/__init__.py",
     "yt_dlp/networking/__init__.py",
     "yt_dlp/downloader/__init__.py",
-    "mutagen/__init__.py",
     # TLS CA bundle (yt-dlp loads certifi.where() when present)
     "certifi/__init__.py",
     "certifi/cacert.pem",
@@ -80,7 +79,6 @@ IMPORT_PROBES = [
     "sqlalchemy.dialects.sqlite",
     "typing_extensions",
     "yt_dlp",
-    "mutagen",
     "certifi",
 ]
 
@@ -122,7 +120,7 @@ def main():
 
     # Pre-check: the validation needs the full closure installed.
     expected = ["flask", "flask_sqlalchemy", "sqlalchemy", "yt_dlp",
-                "mutagen", "certifi"]
+                "certifi"]
     missing_pkgs = [p for p in expected
                     if not os.path.exists(os.path.join(src, p))]
     if missing_pkgs:
@@ -179,7 +177,7 @@ def main():
     # nothing in the chain strips it; flask's own test client needs
     # importlib.metadata.version("werkzeug")).
     dist_names = {"flask", "flask-sqlalchemy", "sqlalchemy",
-                  "typing-extensions", "yt-dlp", "mutagen", "certifi",
+                  "typing-extensions", "yt-dlp", "certifi",
                   "jinja2", "werkzeug", "markupsafe", "itsdangerous",
                   "click", "blinker"}
     for entry in os.listdir(STRIPPED):
@@ -268,6 +266,8 @@ def main():
         "ydl = YoutubeDL({'quiet': True, 'no_warnings': True}); "
         "ie = ydl.get_info_extractor('Youtube'); "
         "assert ie is not None and ie.ie_key() == 'Youtube', ie; "
+        "from yt_dlp.dependencies import certifi; "
+        "assert certifi is not None, 'yt-dlp cannot see certifi (TLS would fail on Android)'; "
         "print('functional probes ok:', type(ie).__name__)"
     )
     proc = subprocess.run([sys.executable, "-c", func_code], capture_output=True,

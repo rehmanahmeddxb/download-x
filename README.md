@@ -42,7 +42,7 @@ waitress, requests, Kivy). Current builds are much smaller thanks to:
 
 * `webview` bootstrap instead of SDL2/Kivy,
 * a minimal pinned closure — just flask, flask-sqlalchemy, sqlalchemy,
-  typing-extensions, yt-dlp, mutagen and certifi
+  typing-extensions, yt-dlp and certifi
   (only packages the code actually imports; see `requirements.txt`),
 * a file blacklist (`p4a-blacklist.txt`) that drops the ~940 yt-dlp
   extractors for non-YouTube sites plus test helpers and bytecode caches
@@ -54,6 +54,12 @@ waitress, requests, Kivy). Current builds are much smaller thanks to:
 What remains is mostly unavoidable for this feature set: embedded CPython
 + OpenSSL/SQLite, the YouTube-relevant part of yt-dlp, and SQLAlchemy.
 Expect roughly **20 MB** for the debug APK.
+
+Note: `certifi`'s ~280 KB CA bundle is deliberately *in* the closure —
+Android has no CA path Python's `ssl` module can use, so without it every
+fetch and download would fail TLS verification on-device (yt-dlp prefers
+certifi when installed, and `config.py` also exports `SSL_CERT_FILE` so
+the stdlib urllib proxy uses it too).
 
 Need 32-bit devices? Add the ABI (roughly doubles native size):
 

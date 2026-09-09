@@ -7,7 +7,9 @@
 # Deliberately absent (verified unused): Kivy (webview bootstrap needs no
 # UI toolkit), waitress (Flask's threaded dev server is enough for a
 # loopback server), requests (direct streaming uses stdlib urllib),
-# APScheduler (nothing schedules jobs).
+# APScheduler (nothing schedules jobs), mutagen (only used by yt-dlp's
+# EmbedThumbnail postprocessor, which also needs ffmpeg -- absent on
+# Android -- and our embed_thumbnail setting defaults to off).
 #
 # Bump yt-dlp periodically -- YouTube changes break old versions regularly.
 Flask==3.1.3
@@ -15,5 +17,4 @@ Flask-SQLAlchemy==3.1.1
 SQLAlchemy==2.0.52
 typing-extensions==4.16.0
 yt-dlp==2026.8.19
-mutagen==1.48.1
 certifi==2026.7.22

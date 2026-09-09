@@ -22,6 +22,32 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ANDROID_PACKAGE = "org.downloadsx.downloadsx"
 
 
+def _point_ssl_at_bundled_cas() -> None:
+    """Make every default TLS context use the bundled certifi CA file.
+
+    Android ships no CA path Python's ``ssl`` module can use, so without
+    this every HTTPS call (yt-dlp fetches, the urllib direct-stream
+    proxy) fails on-device with "certificate verify failed". yt-dlp
+    prefers certifi on its own when it is installed; exporting
+    ``SSL_CERT_FILE`` covers everything else that builds a default
+    context (``ssl.create_default_context`` honors it). Respects an
+    explicitly configured environment and never raises.
+    """
+    if os.environ.get("SSL_CERT_FILE"):
+        return
+    try:
+        import certifi
+
+        bundle = certifi.where()
+        if os.path.isfile(bundle):
+            os.environ["SSL_CERT_FILE"] = bundle
+    except Exception:
+        pass
+
+
+_point_ssl_at_bundled_cas()
+
+
 def is_android() -> bool:
     """True when running inside the Android APK."""
     if sys.platform == "android":

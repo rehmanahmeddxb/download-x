@@ -67,14 +67,18 @@ android.numeric_version = 2
 #   yt-dlp                 pip, pure -- download engine (only the YouTube
 #                          extractor stack is kept; the other ~930 site
 #                          modules are stripped by p4a-blacklist.txt)
-#   mutagen                pip, pure -- lets yt-dlp embed thumbnails/metadata
-#   certifi                pip, pure -- TLS CA bundle (Android has no usable
-#                          system CA path for Python's ssl module)
+#   certifi                pip, pure -- TLS CA bundle. Android ships no usable
+#                          system CA path for Python's ssl module, so without
+#                          this every YouTube fetch/download fails with
+#                          "certificate verify failed" (yt-dlp prefers certifi
+#                          when present; config.py also exports SSL_CERT_FILE
+#                          so stdlib urllib uses it too).
 # Deliberately absent: Kivy (webview bootstrap needs no UI toolkit),
 # waitress (Flask's threaded dev server is enough for a loopback server),
-# requests (direct streaming uses stdlib urllib), APScheduler (unused).
+# requests (direct streaming uses stdlib urllib), APScheduler (unused),
+# mutagen (thumbnail embedding needs ffmpeg anyway -- absent on Android).
 # Version pins mirror requirements.txt so desktop and APK behave the same.
-requirements = python3,flask==3.1.3,flask-sqlalchemy==3.1.1,sqlalchemy==2.0.52,typing-extensions==4.16.0,yt-dlp==2026.8.19,mutagen==1.48.1,certifi==2026.7.22
+requirements = python3,flask==3.1.3,flask-sqlalchemy==3.1.1,sqlalchemy==2.0.52,typing-extensions==4.16.0,yt-dlp==2026.8.19,certifi==2026.7.22
 
 # (str) p4a file blacklist: fnmatch patterns for files to LEAVE OUT of the
 # APK (see above). A custom file REPLACES the bootstrap defaults, so
