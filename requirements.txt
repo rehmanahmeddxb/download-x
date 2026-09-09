@@ -1,6 +1,7 @@
+# Keep minimal: ONLY packages the code actually imports. Every entry here
+# is bundled into the APK, so unused deps directly bloat it.
+# (APScheduler / waitress / requests / Kivy were previously listed but are
+# not imported anywhere -- they only made the APK bigger.)
 Flask
 Flask-SQLAlchemy
 yt-dlp>=2024.1
-APScheduler>=3.10
-waitress>=2.1
-requests>=2.28

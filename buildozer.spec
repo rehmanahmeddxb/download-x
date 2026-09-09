@@ -5,6 +5,18 @@
 # installable .apk. The GitHub Actions workflow in
 # .github/workflows/build-apk.yml drives that build and uploads the resulting
 # APK as a workflow artifact.
+#
+# Size strategy (this is what keeps the APK small):
+#   * `webview` bootstrap instead of SDL2/Kivy -- the UI is a native Android
+#     WebView pointed at the bundled Flask server, so the whole game-engine
+#     stack (~20 MB) and the Kivy dependency are gone.
+#   * Minimal `requirements`: only what the code actually imports
+#     (Flask + Flask-SQLAlchemy + yt-dlp).
+#   * Single 64-bit ABI (`android.archs = arm64-v8a`). Add `armeabi-v7a`
+#     only if you must support 32-bit-only devices -- it roughly doubles
+#     the native-code size.
+#   * The desktop `database.db` is never packaged; the app creates a fresh
+#     database in its private storage on first launch.
 # ---------------------------------------------------------------------------
 
 [app]
@@ -22,18 +34,22 @@ package.domain = org.downloadsx
 source.dir = .
 
 # (list) Source files to include (let empty to include all)
-source.include_exts = py,png,jpg,kv,atlas,html,js,css,db
+source.include_exts = py,png,jpg,html,js,css
 
 # (list) Source files to exclude
-source.exclude_patterns = .git/*,.github/*,buildozer.spec,*.zip,downloads/*,temp/*,logs/*,instance/*,__pycache__/*
+source.exclude_patterns = .git/*,.github/*,buildozer.spec,*.zip,*.log,database.db*,downloads/*,temp/*,logs/*,instance/*,__pycache__/*,bin/*,.buildozer/*,ci-artifacts/*,.ccache/*
 
 # (str) Application versioning (method 1)
-version = 0.1.0
+version = 0.2.0
 
-# (list) Application requirements (must be in p4a's recipes)
-# flask, flask-sqlalchemy, apscheduler, requests and waitress are pure-Python
-# and are bundled directly without needing a recipe.
-requirements = python3,flask,flask-sqlalchemy,yt-dlp,apscheduler,requests,waitress,kivy
+# (int) Version code -- bump for every release so Android accepts the new
+# APK as an upgrade over the previously installed one.
+android.numeric_version = 2
+
+# (list) Application requirements -- keep minimal: only packages the code
+# actually imports. flask, flask-sqlalchemy and yt-dlp are pure-Python and
+# are bundled directly without needing a recipe.
+requirements = python3,flask,flask-sqlalchemy,yt-dlp
 
 # (str) Presplash / icon
 # (we don't ship one, so leave the defaults)
@@ -46,8 +62,11 @@ orientation = portrait
 # (bool) Indicate if the application should be fullscreen or not
 fullscreen = 0
 
-# (str) Permissions the app needs on Android
-android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE,WAKE_LOCK,FOREGROUND_SERVICE
+# (str) Permissions the app needs on Android. Downloads, the database and
+# logs all live in the app's private storage, so no storage permission is
+# needed (and MANAGE_EXTERNAL_STORAGE must stay out -- it triggers install
+# warnings and Play review for no benefit).
+android.permissions = INTERNET,ACCESS_NETWORK_STATE
 
 # (str) Android API version to target / min
 android.api = 33
@@ -57,25 +76,25 @@ android.minapi = 21
 # Do not pre-create a licenses-only SDK directory: it skips SDK installation.
 android.accept_sdk_license = True
 
-# (int) Target Android SDK
+# (int) Target Android NDK API
 android.ndk_api = 21
 
-# (bool) Use legacy build (may be needed on older p4a versions)
-# android.use_legacy_build = True
+# (list) ABIs to build. arm64-v8a covers virtually all modern phones and
+# keeps the APK minimal. Add armeabi-v7a (comma-separated) only if you need
+# 32-bit-only devices -- it roughly doubles the native-code size.
+android.archs = arm64-v8a
 
-# (str) Java activity supplied by the SDL2 bootstrap (Python starts in main.py).
-android.entrypoint = org.kivy.android.PythonActivity
+# (str) Bootstrap to use: a native WebView showing the bundled Flask app.
+# The bootstrap displays a loading screen until the server on `p4a.port`
+# answers, then loads the UI -- purpose-built for apps like this one.
+p4a.bootstrap = webview
 
-# (str) Bootstrap to use
-p4a.bootstrap = sdl2
+# (int) Port the WebView bootstrap loads (must match Config.PORT).
+p4a.port = 5000
 
 # Keep the Python/hostpython recipes (3.14.2) in sync with CI's pip constraint.
 p4a.branch = master
 p4a.commit = 58d21141f17c889bf8585f5665921d72028f8831
-
-# (list) Android additional libraries
-# p4a.archives =
-# p4a.bootstrap =
 
 # ---------------------------------------------------------------------------
 # Build settings
