@@ -112,32 +112,56 @@ jobs:
           ls -la bin/ 2>/dev/null || true
           find . -maxdepth 3 -name "*.apk" -print
 
-      - name: Surface build failure tail
+      - name: Surface build failure cause
         # When the build step fails, the console log alone can be hard to
-        # retrieve; emit the tail of buildozer.log as check annotations so
-        # the root cause is visible via the API / checks UI.
+        # retrieve; extract the *actual* error from buildozer.log (the last
+        # lines are usually just an env dump) and emit it as check
+        # annotations so the root cause is visible via the API / checks UI.
         if: failure()
         run: |
           LOG="${{ github.workspace }}/buildozer.log"
-          echo "===== last 100 lines of buildozer.log ====="
-          tail -n 100 "$LOG" 2>/dev/null || echo "(no buildozer.log found)"
+          echo "===== log size ====="
+          wc -l "$LOG" 2>/dev/null || echo "(no buildozer.log found)"
           python3 - "$LOG" <<'EOF'
-          import sys
+          import re, sys
+          ansi = re.compile(r"\x1b\[[0-9;]*m")
           try:
               with open(sys.argv[1], errors="replace") as f:
-                  lines = f.read().splitlines()
+                  raw = f.read().splitlines()
           except OSError:
               print("::error::buildozer.log not found; build failed before logging started")
               sys.exit(0)
-          tail = lines[-80:]
-          base = len(lines) - len(tail)
+          lines = [ansi.sub("", ln).rstrip() for ln in raw]
+          n = len(lines)
           def esc(s):
               return s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-          # Emit in ~15-line chunks (annotation size limits).
-          for i in range(0, len(tail), 15):
-              chunk = tail[i:i + 15]
-              lo, hi = base + i + 1, base + i + len(chunk)
-              print(f"::error::buildozer failed (log lines {lo}-{hi}):%0A{esc(chr(10).join(chunk))}")
+          def emit(title, numbered):
+              for j in range(0, len(numbered), 12):
+                  chunk = numbered[j:j + 12]
+                  print(f"::error::buildozer {title}:%0A{esc(chr(10).join(chunk))}")
+          # 1) Python tracebacks with context (the real exception is at the end).
+          tb_idx = [i for i, ln in enumerate(lines) if "Traceback (most recent call last)" in ln]
+          if tb_idx:
+              i = tb_idx[-1]
+              emit("traceback", [f"{k+1}: {lines[k]}" for k in range(i, min(i + 25, n))])
+          else:
+              emit("traceback", ["(no Python traceback in log)"])
+          # 2) Last buildozer/p4a commands that were executed.
+          runs = [i for i, ln in enumerate(lines) if ln.strip().startswith(("# Run ", "# Command failed"))]
+          emit("last-commands", [f"{i+1}: {lines[i][:400]}" for i in runs[-6:]] or ["(no '# Run' lines)"])
+          # 3) Error-pattern matches (numbered, deduped, most recent last).
+          pats = re.compile(r"Error|ERROR|FAILED|Failed|failed to|Exception|FATAL|Caused by|BUILD FAILED|Recipe .* failed|not found|No such|Cannot |Conflict|Unsatisfiable|license|License|returned non-zero|exit code|raise ")
+          seen, hits = set(), []
+          for i, ln in enumerate(lines):
+              s = ln.strip()
+              if not s or "#     " in ln[:8]:
+                  continue  # skip env-dump lines
+              if pats.search(s) and s not in seen:
+                  seen.add(s)
+                  hits.append(f"{i+1}: {s[:400]}")
+          emit("error-scan", hits[-48:] or ["(no error-pattern matches)"])
+          # 4) Raw tail for context.
+          emit("tail", [f"{i+1}: {lines[i][:400]}" for i in range(max(0, n - 12), n)])
           EOF
 
       - name: Upload build log (always)
